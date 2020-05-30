@@ -295,6 +295,8 @@ classdef filteredState_BlindLandingtrack < handle
         end
         
         function setLandingSide(obj)
+            % To set landing side for all extracted rref segments
+            
             if strcmpi(obj.landingSide, 'Hive')
                 [obj.rrefSegments.side] = deal(1);
             elseif strcmpi(obj.landingSide, 'Feeder')

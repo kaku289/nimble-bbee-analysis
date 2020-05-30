@@ -42,7 +42,7 @@ delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved 
 savePlots = false;
 
 pattern = {'checkerboard', 'spokes'};
-light = {'lower', 'low', 'medium', 'high'};
+light = {'low', 'medium', 'high', 'lower'};
 behaviour = {'rising','constant','sleeping'};
 
 rmse_func = @(idx, indices, data) sqrt(sum((data(indices(idx,1):indices(idx,2)) - mean(data(indices(idx,1):indices(idx,2)))).^2)/(indices(idx,2)-indices(idx,1)+1));
@@ -169,16 +169,17 @@ end
 save(outputFile, 'treatments');
 keyboard;
 
-%% Extract rref data for statistical analysis 
+%% Extract rref data for statistical analysis
 clc; close all;
 % clear;
 
 inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 load(inputFile);
-treatments = treatments(1:14*8); % not taking into account last 2 days
+% treatments = treatments(1:14*8); % Taking experiments for pattern*light
+% combination
 
 pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+light = {'low', 'medium', 'high', 'lower'};
 behaviour = {'rising','constant','sleeping'};
 
 data = data4rrefEstimate.empty;
@@ -229,10 +230,50 @@ for ct_pattern = 1:length(pattern)
     end
 end
 
+%% Write file for statistical analysis in R
+% This file contains data for all the factors
+clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_rref_Rstudio.txt';
+data_write = [];
+for ct_factor=1:length(factors)
+    factor = factors(ct_factor);
+    
+    data_fac = data(abs([data.factor]-factor)<1e-6)';
+    N = length(data_fac);
+    
+    % Create nominal and ordinal variables
+    approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
+    % create other variables
+    logy = log(-vertcat(data_fac.ymean_ti));
+    logr = log(-vertcat(data_fac.rref_ti));
+    
+    data_write = [data_write; ...
+        vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) logy logr factor*ones(size(logr,1),1)];
+    
+    N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
+    disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(logr,1)), ...
+          ', # tracks with >1 r*: ' num2str(N1)]);
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','logy','logr','threshold'});
+    writetable(T,r_file);
+end
+
+
 %% Statistical analysis
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/rFile.txt';
-for ct_factor=8%1:length(factors)
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_rref_Rstudio.txt';
+for ct_factor=4%1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
@@ -263,7 +304,8 @@ for ct_factor=8%1:length(factors)
     
     if writeFile
         T = array2table([vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-            vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) logy logr],'VariableNames',{'approach','landingSide','pattern','light','time','day','logy','logr'});
+            vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) logy logr], ...
+            'VariableNames',{'approach','landingSide','pattern','light','time','day','logy','logr'});
         writetable(T,r_file);
     end
     
@@ -396,6 +438,16 @@ figure;
 plot(factors, intercepts,'o')
 figure;
 plot(factors, slopes,'o')
+%% NOTES 
+% 1) Can't use post-hoc test emmeans available at https://nl.mathworks.com/matlabcentral/fileexchange/71970-emmeans
+%    This is because " For now, only output from fitglme can be used. 
+%    Major limitation is that only interactions between categorical predictor
+%    variables are accepted (not between continuous variables or categorical-continuous interactions)."
+% 2) Plus, we need a function similar to emtrends in R to assess comparison
+%    of difference in slopes of covariate logy in different conditions.
+%    Such a function is not available in Matlab as of now.
+% 3) This means R has to be used for the statistical analysis.
+
 %%
 % clc; close all;
 
