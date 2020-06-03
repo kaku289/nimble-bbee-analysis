@@ -12,6 +12,7 @@ classdef DataGUI_BlindTracks < handle
         Vgy_mode1 = zeros(5,2);
         
         % Mode 2 - to select track segments with rise transients
+        t_mode2 = zeros(5,2);
         y_mode2 = zeros(5,2);
         Vgy_mode2 = zeros(5,2);
         

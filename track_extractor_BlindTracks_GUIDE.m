@@ -22,7 +22,7 @@ function varargout = track_extractor_BlindTracks_GUIDE(varargin)
 
 % Edit the above text to modify the response to help track_extractor_BlindTracks_GUIDE
 
-% Last Modified by GUIDE v2.5 09-Jan-2020 11:11:57
+% Last Modified by GUIDE v2.5 30-May-2020 23:41:31
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -82,7 +82,7 @@ try
     pattern = evalin("base","pattern");
     light = evalin("base","light");
     
-    handles.appData.filename = ['GUIDE_appData_Blindtracks_' pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour} '.mat'];
+    handles.appData.filename = ['GUIDE_appData_Blindtracks_' pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour} '_A2_manual.mat'];
     information = [information ' Filename for saving appData: ' handles.appData.filename];
 catch
     handles.appData.filename = ['GUIDE_appData_Blindtracks_' 'UNKNOWN' '.mat'];
@@ -91,21 +91,14 @@ end
 
 %
 handles.trackExcerpt = 1;
+%
+handles.mode.Value = true;
 
 % Displaying info
 displayInfo(hObject, handles, information);
 
 % Setting axes properly
 setAxes(hObject, handles);
-
-% Setting mode
-if handles.appData.mode == 1
-    handles.mode2.Value = false;
-    handles.mode1.Value = true;
-elseif handles.appData.mode == 2
-    handles.mode2.Value = true;
-    handles.mode1.Value = false;
-end
 
 % Setting which part will be selected
 handles.appData.part = 1;
@@ -151,23 +144,27 @@ handles.displayBoard.String = information;
 function setAxes(hObject, handles)
 % The first axes:
 axes(handles.axes1); grid on;
-ylabel('V_{gy} (m/s)', 'FontSize', 12);
+ylabel('r (1/s)', 'FontSize', 12);
 % xlabel('y (m)', 'FontSize', 12);
 
 % The second axes
 axes(handles.axes2); grid on;
-ylabel('V_{gy} / y (1/s)', 'FontSize', 12);
+ylabel('r (1/s)', 'FontSize', 12);
 % xlabel('y (m)', 'FontSize', 12);
 
 % The third axes
 axes(handles.axes3); grid on;
-ylabel('a_y / V_{gy} (1/s^2)', 'FontSize', 12);
-xlabel('y (m)', 'FontSize', 12);
+ylabel('a_y (m/s^2)', 'FontSize', 12);
+xlabel('t (s)', 'FontSize', 12);
 
 % The fourth axes
 axes(handles.axes4); grid on; 
-ylabel('V_{gy} / y (1/s)', 'FontSize', 12);
+ylabel('V_{gy} (m/s)', 'FontSize', 12);
 xlabel('y (m)', 'FontSize', 12);
+
+% The fifth axes
+axes(handles.axes5); grid on;
+ylabel('rdot (1/s^2)', 'FontSize', 12);
 
 
 
@@ -175,46 +172,66 @@ xlabel('y (m)', 'FontSize', 12);
 function plotTrackData(hObject, handles, track)
 % track - instance of BlindLandingtrack
 
-part = handles.appData.part; % Part corresponds to which segment of mode 1or2 will be displayed
+part = handles.appData.part; % Part corresponds to which segment of mode 1or2or3 will be displayed
 
 state_subset = track.state_LDF(handles.trackExcerpt).filteredState;
 
 axes(handles.axes1);
-plot(state_subset(:,3),state_subset(:,6),'m.','MarkerSize',10);
-if handles.appData.mode == 2
-    xline(handles.axes1,  track.DataGUI(handles.trackExcerpt).y(part,1), 'Label', 'y_{start}');
-    xline(handles.axes1,  track.DataGUI(handles.trackExcerpt).y(part,2), 'Label', 'y_{end}');
-elseif handles.appData.mode == 1
-    xline(handles.axes1,  track.DataGUI(handles.trackExcerpt).y_mode1(part,1), 'Label', 'y_{start}');
-    xline(handles.axes1,  track.DataGUI(handles.trackExcerpt).y_mode1(part,2), 'Label', 'y_{end}');
-end
+plot(state_subset(:,3),state_subset(:,6)./state_subset(:,3),'m.','MarkerSize',10);
+xline(handles.axes1,  track.DataGUI(handles.trackExcerpt).y_mode2(part,1), 'Label', 'y_{start}');
+xline(handles.axes1,  track.DataGUI(handles.trackExcerpt).y_mode2(part,2), 'Label', 'y_{end}');
+
 % grid on;
 
 axes(handles.axes2);
-plot(state_subset(:,3),state_subset(:,6)./state_subset(:,3),'m.','MarkerSize',10);
-if handles.appData.mode == 2
-    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).y(part,1), 'Label', 'y_{start}');
-    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).y(part,2), 'Label', 'y_{end}');
-elseif handles.appData.mode == 1
-    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).y_mode1(part,1), 'Label', 'y_{start}');
-    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).y_mode1(part,2), 'Label', 'y_{end}');
+plot(state_subset(:,1)-state_subset(end,1),state_subset(:,6)./state_subset(:,3),'m.','MarkerSize',10);
+if track.DataGUI(handles.trackExcerpt).t_mode2(part,1) == 0
+    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).t_mode2(part,1), 'Label', 't_{start}');
+else
+    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).t_mode2(part,1)-state_subset(end,1), 'Label', 't_{start}');
 end
+
+if track.DataGUI(handles.trackExcerpt).t_mode2(part,2) == 0
+    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).t_mode2(part,2), 'Label', 't_{end}');
+else
+    xline(handles.axes2,  track.DataGUI(handles.trackExcerpt).t_mode2(part,2)-state_subset(end,1), 'Label', 't_{end}');
+end
+
 % grid on;
 
 axes(handles.axes3);
-% plot(state_subset(:,3),state_subset(:,9)./state_subset(:,3)-state_subset(:,6).^2./state_subset(:,3).^2,'m.','MarkerSize',10);
-plot(state_subset(:,3),state_subset(:,9)./state_subset(:,6),'m','MarkerSize',10);
+plot(state_subset(:,1)-state_subset(end,1),state_subset(:,9),'m.','MarkerSize',10);
 
 axes(handles.axes4);
 hold off;
-plot(track.state(handles.trackExcerpt).filteredState(:,3),track.state(handles.trackExcerpt).filteredState(:,6),'m.','MarkerSize',10); hold on;
-plot(track.rawTrack(handles.trackExcerpt).rawState(:,5),track.rawTrack(handles.trackExcerpt).rawState(:,8),'b.','MarkerSize',10);
+plot(state_subset(:,3), state_subset(:,6),'m.','MarkerSize',10); hold on;
+plot(track.raw_LDF(handles.trackExcerpt).rawState(:,5),track.raw_LDF(handles.trackExcerpt).rawState(:,8),'b.','MarkerSize',10);
+xline(handles.axes4,  track.DataGUI(handles.trackExcerpt).y_mode2(part,1), 'Label', 'y_{start}');
+xline(handles.axes4,  track.DataGUI(handles.trackExcerpt).y_mode2(part,2), 'Label', 'y_{end}');
 
-linkaxes([handles.axes1, handles.axes2, handles.axes3],'x');
+linkaxes([handles.axes2, handles.axes3, handles.axes5],'x');
 
-xlim(handles.axes2, [min(state_subset(:,3))-0.01 0]);
+
+axes(handles.axes5);
+plot(state_subset(:,1)-state_subset(end,1),(state_subset(:,3).*state_subset(:,9)-state_subset(:,6).^2)./state_subset(:,3).^2,'m.-','MarkerSize',10);
+if track.DataGUI(handles.trackExcerpt).t_mode2(part,1) == 0
+    xline(handles.axes5,  track.DataGUI(handles.trackExcerpt).t_mode2(part,1), 'Label', 't_{start}');
+else
+    xline(handles.axes5,  track.DataGUI(handles.trackExcerpt).t_mode2(part,1)-state_subset(end,1), 'Label', 't_{start}');
+end
+
+if track.DataGUI(handles.trackExcerpt).t_mode2(part,2) == 0
+    xline(handles.axes5,  track.DataGUI(handles.trackExcerpt).t_mode2(part,2), 'Label', 't_{end}');
+else
+    xline(handles.axes5,  track.DataGUI(handles.trackExcerpt).t_mode2(part,2)-state_subset(end,1), 'Label', 't_{end}');
+end
+
+
+% xlim(handles.axes2, [min(state_subset(:,3))-0.01 0]);
+ylim(handles.axes1, [-11 2]);
 ylim(handles.axes2, [-11 2]);
-ylim(handles.axes3, [-40 40]);
+ylim(handles.axes3, [-10 10]);
+ylim(handles.axes5, [-50 50]);
 
 setAxes(hObject, handles);
 
@@ -222,15 +239,10 @@ function updateGUIDisplay(hObject, handles)
 part = handles.appData.part; % Part corresponds to which segment of mode 1or2 will be displayed
 track = handles.tracks(handles.appData.currentTrack);
 
-if handles.appData.mode == 2
-    handles.y_start_editBox.String = num2str(track.DataGUI(handles.trackExcerpt).y(part,1), '%2.3f');
-    handles.y_end_editBox.String = num2str(track.DataGUI(handles.trackExcerpt).y(part,2), '%2.3f');
-elseif handles.appData.mode == 1
-    handles.y_start_editBox.String = num2str(track.DataGUI(handles.trackExcerpt).y_mode1(part,1), '%2.3f');
-    handles.y_end_editBox.String = num2str(track.DataGUI(handles.trackExcerpt).y_mode1(part,2), '%2.3f');
-end
 
-handles.checkbox1.Value = track.DataGUI(handles.trackExcerpt).isExcerptUseful;
+handles.y_start_editBox.String = num2str(track.DataGUI(handles.trackExcerpt).y_mode2(part,1), '%2.3f');
+handles.y_end_editBox.String = num2str(track.DataGUI(handles.trackExcerpt).y_mode2(part,2), '%2.3f');
+
 
 % update part display
 displayPartInfo(handles)
@@ -278,22 +290,6 @@ track = handles.tracks(handles.appData.currentTrack); % Instance of BlindLanding
 if isempty(track.DataGUI) || length(track.DataGUI) ~= length(track.state)
     for ct=1:length(track.state) % for each track excerpt
         track.DataGUI(ct) = DataGUI_BlindTracks();
-    end
-end
-
-
-% To make backwards compatibility before 30/01/2020 - Comment it after
-% processing high spokes first 800 trajectories
-for ct=1:length(track.state) % for each track excerpt
-    if size(track.DataGUI(ct).y_mode1,1) == 1 
-        y_mode1 = track.DataGUI(ct).y_mode1;
-        Vgy_mode1 = track.DataGUI(ct).Vgy_mode1;
-        
-        track.DataGUI(ct).y_mode1 = zeros(5,2);
-        track.DataGUI(ct).y_mode1(1,:) = y_mode1;
-        
-        track.DataGUI(ct).Vgy_mode1 = zeros(5,2);
-        track.DataGUI(ct).Vgy_mode1(1,:) = Vgy_mode1;
     end
 end
 
@@ -364,32 +360,39 @@ switch handles.zoomin.State
         if strcmpi(key, 'numpad1')
             part = handles.appData.part;
             
-            displayInfo(hObject, handles, 'In getting y_start mode... Double click to get a point in first axes.');
+            displayInfo(hObject, handles, 'In getting start mode... Double click to get a point in first axes.');
             
-            [xi, yi] = getpts(handles.axes1);
+            [xi, yi] = getpts(handles.axes2);
             track = handles.tracks(handles.appData.currentTrack);
             
             % Snap onto the nearest point in the dataset
-            % Assumes that point is acquired in axes1 (V vs y)
+            % Assumes that point is acquired in axes2 (r vs t)
             state_subset = track.state_LDF(handles.trackExcerpt).filteredState;
-            [~,indx] = min(sqrt((state_subset(:,3)-xi(end)).^2 +(state_subset(:,6)-yi(end)).^2));
-            if handles.appData.mode == 2
-                track.DataGUI(handles.trackExcerpt).y(part,1) = state_subset(indx,3);
-                track.DataGUI(handles.trackExcerpt).Vgy(part,1) = state_subset(indx,6);
-            elseif handles.appData.mode == 1
-                track.DataGUI(handles.trackExcerpt).y_mode1(part,1) = state_subset(indx,3);
-                track.DataGUI(handles.trackExcerpt).Vgy_mode1(part,1) = state_subset(indx,6);
-            end
+            [~,indx] = min(sqrt((state_subset(:,1)-state_subset(end,1)-xi(end)).^2 +(state_subset(:,6)./state_subset(:,3)-yi(end)).^2));
+            
+            track.DataGUI(handles.trackExcerpt).t_mode2(part,1) = state_subset(indx,1);
+            track.DataGUI(handles.trackExcerpt).y_mode2(part,1) = state_subset(indx,3);
+            track.DataGUI(handles.trackExcerpt).Vgy_mode2(part,1) = state_subset(indx,6);
+            
             handles.y_start_editBox.String = num2str(state_subset(indx,3), '%2.3f');
             
             for ct=1:length(handles.axes2.Children)
                 if isa(handles.axes2.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
-                        strcmpi(handles.axes2.Children(ct).Label, 'y_{start}')
+                        strcmpi(handles.axes2.Children(ct).Label, 't_{start}')
                     delete(handles.axes2.Children(ct));
                     break;
                 end
             end
-            xline(handles.axes2, state_subset(indx,3), 'Label', 'y_{start}');
+            xline(handles.axes2, state_subset(indx,1)-state_subset(end,1), 'Label', 't_{start}');
+            
+            for ct=1:length(handles.axes5.Children)
+                if isa(handles.axes5.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
+                        strcmpi(handles.axes5.Children(ct).Label, 't_{start}')
+                    delete(handles.axes5.Children(ct));
+                    break;
+                end
+            end
+            xline(handles.axes5, state_subset(indx,1)-state_subset(end,1), 'Label', 't_{start}');
             
             for ct=1:length(handles.axes1.Children)
                 if isa(handles.axes1.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
@@ -400,33 +403,14 @@ switch handles.zoomin.State
             end
             xline(handles.axes1, state_subset(indx,3), 'Label', 'y_{start}');
             
-%             if handles.appData.mode == 2
-%                 track.DataGUI(handles.trackExcerpt).y(1,1) = xi(end-1);
-%                 track.DataGUI(handles.trackExcerpt).Vgy(1,1) = yi(end-1);
-%             elseif handles.appData.mode == 1
-%                 track.DataGUI(handles.trackExcerpt).y_mode1(1,1) = xi(end-1);
-%                 track.DataGUI(handles.trackExcerpt).Vgy_mode1(1,1) = yi(end-1);
-%             end
-%             
-%             handles.y_start_editBox.String = num2str(xi(end-1), '%2.3f');
-%             
-%             for ct=1:length(handles.axes2.Children)
-%                 if isa(handles.axes2.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
-%                         strcmpi(handles.axes2.Children(ct).Label, 'y_{start}')
-%                     delete(handles.axes2.Children(ct));
-%                     break;
-%                 end
-%             end
-%             xline(handles.axes2, xi(end-1), 'Label', 'y_{start}');
-%             
-%             for ct=1:length(handles.axes1.Children)
-%                 if isa(handles.axes1.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
-%                         strcmpi(handles.axes1.Children(ct).Label, 'y_{start}')
-%                     delete(handles.axes1.Children(ct));
-%                     break;
-%                 end
-%             end
-%             xline(handles.axes1, xi(end-1), 'Label', 'y_{start}');
+            for ct=1:length(handles.axes4.Children)
+                if isa(handles.axes4.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
+                        strcmpi(handles.axes4.Children(ct).Label, 'y_{start}')
+                    delete(handles.axes4.Children(ct));
+                    break;
+                end
+            end
+            xline(handles.axes4, state_subset(indx,3), 'Label', 'y_{start}');
             
             displayInfo(hObject, handles, '');
             
@@ -436,32 +420,38 @@ switch handles.zoomin.State
         elseif strcmpi(key, 'numpad2')
             part = handles.appData.part;
             
-            displayInfo(hObject, handles, 'In getting y_end mode... Double click to get a point in bottom figure.');
+            displayInfo(hObject, handles, 'In getting end mode... Double click to get a point in bottom figure.');
             
-            [xi, yi] = getpts(handles.axes1);
+            [xi, yi] = getpts(handles.axes2);
             track = handles.tracks(handles.appData.currentTrack);
             % Snap onto the nearest point in the dataset
-            % Assumes that point is acquired in axes1 (V vs y)
+            % Assumes that point is acquired in axes2 (r vs t)
             state_subset = track.state_LDF(handles.trackExcerpt).filteredState;
-            [~,indx] = min(sqrt((state_subset(:,3)-xi(end)).^2 +(state_subset(:,6)-yi(end)).^2));
-            if handles.appData.mode == 2
-                track.DataGUI(handles.trackExcerpt).y(part,2) = state_subset(indx,3);
-                track.DataGUI(handles.trackExcerpt).Vgy(part,2) = state_subset(indx,6);
-            elseif handles.appData.mode == 1
-                track.DataGUI(handles.trackExcerpt).y_mode1(part,2) = state_subset(indx,3);
-                track.DataGUI(handles.trackExcerpt).Vgy_mode1(part,2) = state_subset(indx,6);
-            end
+            [~,indx] = min(sqrt((state_subset(:,1)-state_subset(end,1)-xi(end)).^2 +(state_subset(:,6)./state_subset(:,3)-yi(end)).^2));
+            
+            track.DataGUI(handles.trackExcerpt).t_mode2(part,1) = state_subset(indx,1);
+            track.DataGUI(handles.trackExcerpt).y_mode2(part,1) = state_subset(indx,3);
+            track.DataGUI(handles.trackExcerpt).Vgy_mode2(part,1) = state_subset(indx,6);
             
             handles.y_end_editBox.String = num2str(state_subset(indx,3), '%2.3f');
             
             for ct=1:length(handles.axes2.Children)
                 if isa(handles.axes2.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
-                        strcmpi(handles.axes2.Children(ct).Label, 'y_{end}')
+                        strcmpi(handles.axes2.Children(ct).Label, 't_{end}')
                     delete(handles.axes2.Children(ct));
                     break;
                 end
             end
-            xline(handles.axes2, state_subset(indx,3), 'Label', 'y_{end}');
+            xline(handles.axes2, state_subset(indx,1)-state_subset(end,1), 'Label', 't_{end}');
+            
+            for ct=1:length(handles.axes5.Children)
+                if isa(handles.axes5.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
+                        strcmpi(handles.axes5.Children(ct).Label, 't_{end}')
+                    delete(handles.axes5.Children(ct));
+                    break;
+                end
+            end
+            xline(handles.axes5, state_subset(indx,1)-state_subset(end,1), 'Label', 't_{end}');
             
             for ct=1:length(handles.axes1.Children)
                 if isa(handles.axes1.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
@@ -470,36 +460,16 @@ switch handles.zoomin.State
                     break;
                 end
             end
-            xline(handles.axes1, state_subset(indx,3), 'Label', 'y_{end}');            
+            xline(handles.axes1, state_subset(indx,3), 'Label', 'y_{end}');  
             
-            
-%             if handles.appData.mode == 2
-%                 track.DataGUI(handles.trackExcerpt).y(1,2) = xi(end-1);
-%                 track.DataGUI(handles.trackExcerpt).Vgy(1,2) = yi(end-1);
-%             elseif handles.appData.mode == 1
-%                 track.DataGUI(handles.trackExcerpt).y_mode1(1,2) = xi(end-1);
-%                 track.DataGUI(handles.trackExcerpt).Vgy_mode1(1,2) = yi(end-1);
-%             end
-%             
-%             handles.y_end_editBox.String = num2str(xi(end-1), '%2.3f');
-%             
-%             for ct=1:length(handles.axes2.Children)
-%                 if isa(handles.axes2.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
-%                         strcmpi(handles.axes2.Children(ct).Label, 'y_{end}')
-%                     delete(handles.axes2.Children(ct));
-%                     break;
-%                 end
-%             end
-%             xline(handles.axes2, xi(end-1), 'Label', 'y_{end}');
-%             
-%             for ct=1:length(handles.axes1.Children)
-%                 if isa(handles.axes1.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
-%                         strcmpi(handles.axes1.Children(ct).Label, 'y_{end}')
-%                     delete(handles.axes1.Children(ct));
-%                     break;
-%                 end
-%             end
-%             xline(handles.axes1, xi(end-1), 'Label', 'y_{end}');
+            for ct=1:length(handles.axes4.Children)
+                if isa(handles.axes4.Children(ct),'matlab.graphics.chart.decoration.ConstantLine') && ...
+                        strcmpi(handles.axes4.Children(ct).Label, 'y_{end}')
+                    delete(handles.axes4.Children(ct));
+                    break;
+                end
+            end
+            xline(handles.axes4, state_subset(indx,3), 'Label', 'y_{end}');
             
             displayInfo(hObject, handles, '');
             
@@ -530,18 +500,9 @@ switch handles.zoomin.State
         elseif strcmpi(key, 'uparrow')
             saveDataButton_Callback(hObject, event, handles);
         elseif strcmpi(key, 'numpad7') % toggle checkbox1 (whether track is useful for sysID or not)
-            track = handles.tracks(handles.appData.currentTrack);
-            track.DataGUI(handles.trackExcerpt).isExcerptUseful = ~track.DataGUI(handles.trackExcerpt).isExcerptUseful;
-            handles.checkbox1.Value = track.DataGUI(handles.trackExcerpt).isExcerptUseful;
             
-            % Update handles structure
-            guidata(hObject, handles);
         elseif strcmpi(key, 'numpad8') % toggle mode of the app
-            if handles.appData.mode == 1
-                mode2_Callback(hObject, nan, handles);
-            elseif handles.appData.mode == 2
-                mode1_Callback(hObject, nan, handles)
-            end
+            
         elseif strcmpi(key, 'numpad3')
             % Switching between "part"
             if rem(handles.appData.part+1,3) ~= 0
@@ -758,37 +719,6 @@ function pushbutton10_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on button press in mode1.
-function mode1_Callback(hObject, eventdata, handles)
-% hObject    handle to mode1 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hint: get(hObject,'Value') returns toggle state of mode1
-handles.appData.mode = 1;
-handles.mode2.Value = false;
-handles.mode1.Value = true;
-% Update handles structure
-guidata(hObject, handles);
-Loadstart_Callback(hObject, eventdata, handles)
-
-% --- Executes on button press in mode2.
-function mode2_Callback(hObject, eventdata, handles)
-% hObject    handle to mode2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hint: get(hObject,'Value') returns toggle state of mode2
-handles.appData.mode = 2;
-handles.mode2.Value = true;
-handles.mode1.Value = false;
-% Update handles structure
-guidata(hObject, handles);
-Loadstart_Callback(hObject, eventdata, handles);
-% keyboard;
-
-
-
 function edit4_Callback(hObject, eventdata, handles)
 % hObject    handle to edit4 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -815,3 +745,17 @@ function edit4_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes on button press in mode.
+function mode_Callback(hObject, eventdata, handles)
+% hObject    handle to mode (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of mode
+handles.appData.mode = 1;
+handles.mode.Value = true;
+% Update handles structure
+guidata(hObject, handles);
+Loadstart_Callback(hObject, eventdata, handles);

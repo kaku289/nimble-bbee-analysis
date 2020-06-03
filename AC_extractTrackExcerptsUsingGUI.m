@@ -4,32 +4,29 @@
 clc; clear; close all;
 
 % to generate colormaps
-addpath('/home/reken001/Pulkit/lib/DrosteEffect-BrewerMap-221b913');
+addpath('./lib/DrosteEffect-BrewerMap-221b913');
 
 % to add definition of classes being used for this analysis
-addpath('/home/reken001/Pulkit/lib/li_analysis');
+addpath('./lib/li_analysis');
 
 % to include class definitions used in videoscorer_data
-addpath('/home/reken001/Pulkit/lib/video_scorer/');
-% rmpath('/home/reken001/Pulkit/lib/video_scorer/Source');
+addpath('./lib/video_scorer/');
+% rmpath('./lib/video_scorer/Source');
 
 % to include higher order accurate differentiation function
-addpath('/home/reken001/Pulkit/lib/diffxy');
+addpath('./lib/diffxy');
 
 % to include fmf reader
-addpath('/home/reken001/Pulkit/lib/flymovieformat');
+addpath('./lib/flymovieformat');
 
 % to include hline and vline function
-addpath('/home/reken001/Pulkit/lib/hline_vline');
-
-% to include all custom defined class definitions
-addpath('/home/reken001/Pulkit/MATLAB');
+addpath('./lib/hline_vline');
 
 
 %%
 % Inputs
 DataDir = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/';
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks.mat';
+inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_manual.mat';
 load(inputFile);
 
 pattern = {'checkerboard', 'spokes'};
@@ -40,8 +37,9 @@ behaviour = {'rising','constant','sleeping'};
 % light = {'high'};
 % behaviour = {'constant'};
 
+treatments = treatments(1:14*8);
 for ct_pattern = 2%1:length(pattern)
-    for ct_light = 1%1:length(light)
+    for ct_light = 3%1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
         
            % Selecting relevant treatments
@@ -62,7 +60,7 @@ for ct_pattern = 2%1:length(pattern)
                 error('What other treatments did you perform dude?')
             end
             
-            appData_filename = ['GUIDE_appData_Blindtracks_' pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour} '.mat'];
+            appData_filename = ['GUIDE_appData_Blindtracks_' pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour} '_A2_manual.mat'];
             if exist(fullfile(DataDir, appData_filename), 'file')
                 load(fullfile(DataDir, appData_filename));
             end
