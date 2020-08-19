@@ -30,18 +30,21 @@ addpath('/home/reken001/Pulkit/MATLAB');
 DataDir = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/';
 VideoDir = '/media/reken001/Disk_08_backup/light_intensity_experiments/Videos';
 
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1.mat';
+inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 load(inputFile);
 
 pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 
-for ct_pattern = 2%1:length(pattern)
-    for ct_light = 3%1:length(light)
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
+            disp(['Pattern: ' pattern{ct_pattern} ...
+                  ', light: ' light{ct_light} ...
+                  ', behaviour: ' behaviour{ct_behaviour}]);
         
-           % Selecting relevant treatments
+            % Selecting relevant treatments
             if strcmpi(behaviour{ct_behaviour}, 'rising')
                 relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
                                      strcmpi({treatments.light}, light{ct_light}) & ...
@@ -65,6 +68,7 @@ for ct_pattern = 2%1:length(pattern)
 %             end
             
             for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
+                disp(['Into treatment: ' num2str(ct_treatment)]);
                 treatment = relevantTreatments(ct_treatment);
                 
                 % Go to the folder where videos should be stored and
@@ -74,14 +78,15 @@ for ct_pattern = 2%1:length(pattern)
                 treatmentVideosDir = fullfile(VideoDir, datenum_str(1:4), datenum_str(5:6), datenum_str(7:8));
                 if exist(treatmentVideosDir, 'dir')
                     allVideoFiles_cam84 = dir(fullfile(treatmentVideosDir, '*84.fmf'));
-                    allVideoFiles_cam85 = dir(fullfile(treatmentVideosDir, '*85.fmf'));
+%                     allVideoFiles_cam85 = dir(fullfile(treatmentVideosDir, '*85.fmf'));
                     isVideoUseful_cam84 = cellfun(@(x) str2double(x(1:6))>=treatment.startTime && ...
                                             str2double(x(1:6))<=treatment.endTime,{allVideoFiles_cam84.name});
-                    isVideoUseful_cam85 = cellfun(@(x) str2double(x(1:6))>=treatment.startTime && ...
-                                            str2double(x(1:6))<=treatment.endTime,{allVideoFiles_cam85.name});
+%                     isVideoUseful_cam85 = cellfun(@(x) str2double(x(1:6))>=treatment.startTime && ...
+%                                             str2double(x(1:6))<=treatment.endTime,{allVideoFiles_cam85.name});
                     treatmentVideos_cam84 = allVideoFiles_cam84(isVideoUseful_cam84);
-                    treatmentVideos_cam85 = allVideoFiles_cam85(isVideoUseful_cam85);
-                    treatmentVideos = [treatmentVideos_cam84; treatmentVideos_cam85];
+%                     treatmentVideos_cam85 = allVideoFiles_cam85(isVideoUseful_cam85);
+%                     treatmentVideos = [treatmentVideos_cam84; treatmentVideos_cam85];
+                    treatmentVideos = treatmentVideos_cam84;
                     
                     treatment.videosInfo = recordedVideosInformation.empty;
                     
@@ -100,4 +105,5 @@ for ct_pattern = 2%1:length(pattern)
     end
 end
 %% Save file
-save(inputFile, 'treatments');
+outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_videos.mat';
+save(outputFile, 'treatments');

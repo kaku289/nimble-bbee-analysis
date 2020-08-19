@@ -389,6 +389,7 @@ clc; close all;
 % Inputs
 % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1.mat';
 % load(inputFile);
+treatments = treatments(1:14*8);
 
 pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};

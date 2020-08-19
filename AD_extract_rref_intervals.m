@@ -35,11 +35,14 @@ clear;
 
 inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1.mat';
 outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
 load(inputFile);
 
 DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate';
+% DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate_3dspeed';
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
 savePlots = false;
+savePDFs = false;
 
 pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high', 'lower'};
@@ -52,7 +55,7 @@ max_gap = 49;
 params = [0.53 4.22]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
 factors = [0.25:0.25:2.5];
 time_window = [min_gap max_gap];
-% factors = [2.5];
+% factors = [1];
 ct_data = 0;
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
@@ -103,12 +106,14 @@ for ct_pattern = 1:length(pattern)
                           for ct_excerpt=1:length(track.state_LDF) % for each track excerpt
                               excerpt = track.state_LDF(ct_excerpt);
                               
-                              excerpt.compute_rref(params, factors, time_window);
+%                               excerpt.compute_rref(params, factors, time_window);
+                              excerpt.compute_rref_with3dspeed(params, factors, time_window);
                               
                               if savePlots
                                   for ct_factor=1:length(factors)
 
                                       plotHandles = excerpt.plot_rrefs(factors(ct_factor));
+%                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
 
                                       if ~isempty(plotHandles)
 
@@ -127,6 +132,11 @@ for ct_pattern = 1:length(pattern)
                                               end
 
                                               saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
+                                              
+                                              if savePDFs
+                                                  print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
+                                                      '.png','.pdf'), '-dpdf');
+                                              end
                                           end
 
                                           close(plotHandles);
@@ -135,28 +145,6 @@ for ct_pattern = 1:length(pattern)
                                   end
                               end
                                   
-                                  
-                                  
-                                      
-%                                       % Find if any video exists
-%                                       if ~isempty(videoTimes)
-%                                           isVideoUseful = min(time4rrefEstimate)>= videoTimes(:,1) & max(time4rrefEstimate) <= videoTimes(:,2);                                      
-%                                       else
-%                                           isVideoUseful = false;
-%                                       end
-%                                       
-%                                       
-%                                       if any(isVideoUseful)
-% %                                           keyboard
-%                                           data(ct_data).videoInfo = treatment.videosInfo(isVideoUseful);
-%                                       else
-%                                           data(ct_data).videoInfo = recordedVideosInformation.empty;
-%                                       end
-                                      
-                                  
-                                  
-                                  
-                
                           end % for excerpt
                       end % for track
                 end
@@ -165,7 +153,7 @@ for ct_pattern = 1:length(pattern)
         end
     end
 end
-
+keyboard
 save(outputFile, 'treatments');
 keyboard;
 
@@ -174,8 +162,9 @@ clc; close all;
 % clear;
 
 inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
 load(inputFile);
-% treatments = treatments(1:14*8); % Taking experiments for pattern*light
+treatments = treatments(1:14*8); % Taking experiments for first 14 days
 % combination
 
 pattern = {'checkerboard', 'spokes'};
@@ -208,7 +197,10 @@ for ct_pattern = 1:length(pattern)
             
             for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
                 treatment = relevantTreatments(ct_treatment);
+                
                 arrayfun(@(x) x.setLandingSide(),[treatment.landingTracks.state_LDF]'); % to store landing side in the rrefSegments
+%                 arrayfun(@(x) x.compute_params_basedon_3dspeed(), [treatment.landingTracks.state_LDF]');
+                
                 data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
                 data1 = horzcat(data1{:});
                 
@@ -234,7 +226,9 @@ end
 % This file contains data for all the factors
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_rref_Rstudio.txt';
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio.txt';
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio_3dspeed.txt';
+factors = [0.25:0.25:2.5];
 data_write = [];
 for ct_factor=1:length(factors)
     factor = factors(ct_factor);
@@ -251,21 +245,130 @@ for ct_factor=1:length(factors)
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
     % create other variables
-    logy = log(-vertcat(data_fac.ymean_ti));
-    logr = log(-vertcat(data_fac.rref_ti));
+    y = -vertcat(data_fac.ymean_ti);
+    r = -vertcat(data_fac.rref_ti);
+    v = vertcat(data_fac.vmean_ti);
     
+    speed3d = vertcat(data_fac.speed3d_mean_ti);
+%     rSpeed3d = -vertcat(data_fac.rmean_speed3d_ti);
+    
+%     logy = log(y);
+%     logr = log(V);
+        
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) logy logr factor*ones(size(logr,1),1)];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
-    disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(logr,1)), ...
+    disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
           ', # tracks with >1 r*: ' num2str(N1)]);
 end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','logy','logr','threshold'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold', 'speed3d'});
+    writetable(T,r_file);
+end
+
+
+%% Write file for statistical analysis in R
+% This file contains data for all the factors, but only those tracks that
+% contain >1 r* segments
+clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio_3dspeed.txt';
+data_write = [];
+factors = [0.25:0.25:2.5];
+for ct_factor=1:length(factors)
+    factor = factors(ct_factor);
+    
+    data_fac = data(abs([data.factor]-factor)<1e-6)';
+    
+    % Choose segments that contain >1 r* segments
+    has_multiple_rrefs = arrayfun(@(x) size(x.intervals_ti,1) > 1,data_fac);
+    data_fac = data_fac(has_multiple_rrefs);
+    
+    N = length(data_fac);
+    
+    % Create nominal and ordinal variables
+    approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
+    % create other variables
+    y = -vertcat(data_fac.ymean_ti);
+    r = -vertcat(data_fac.rref_ti);
+    v = vertcat(data_fac.vmean_ti);
+    
+%     logy = log(y);
+%     logr = log(V);
+    
+    data_write = [data_write; ...
+        vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+    
+    N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
+    disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
+          ', # tracks with >1 r*: ' num2str(N1)]);
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold'});
+    writetable(T,r_file);
+end
+
+%% Write file for statistical analysis in R
+% This file contains data for all the factors, but only those tracks that
+% contain exactly 1 r* segment
+clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_one_rrefs_Rstudio.txt';
+data_write = [];
+factors = [0.25:0.25:2.5];
+for ct_factor=1:length(factors)
+    factor = factors(ct_factor);
+    
+    data_fac = data(abs([data.factor]-factor)<1e-6)';
+    
+    % Choose segments that contain >1 r* segments
+    has_one_rref = arrayfun(@(x) size(x.intervals_ti,1) == 1, data_fac);
+    data_fac = data_fac(has_one_rref);
+    
+    N = length(data_fac);
+    
+    % Create nominal and ordinal variables
+    approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
+    % create other variables
+    y = -vertcat(data_fac.ymean_ti);
+    r = -vertcat(data_fac.rref_ti);
+    v = vertcat(data_fac.vmean_ti);
+    
+%     logy = log(y);
+%     logr = log(V);
+    
+    data_write = [data_write; ...
+        vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+    
+    N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
+    disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
+          ', # tracks with >1 r*: ' num2str(N1)]);
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold'});
     writetable(T,r_file);
 end
 

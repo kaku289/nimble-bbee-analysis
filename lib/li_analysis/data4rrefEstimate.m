@@ -20,6 +20,9 @@ classdef data4rrefEstimate < handle
         fd_analytical_ti ; % analytically computed flight duration 
         fd_actual_ti ; % actual flight duration
         
+        speed3d_mean_ti;
+        rmean_speed3d_ti;
+        
         intervals_td ; % M by 2, where M is the number of intervals for all time-windows. For each time-window, these intervals are non-overlapping, but across time-windows they can be overlapping
         rref_td ; % N nby 1
         vmean_td ; % N by 1
