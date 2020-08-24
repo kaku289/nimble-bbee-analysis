@@ -26,7 +26,7 @@ addpath('./lib/hline_vline');
 %%
 % Inputs
 DataDir = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/';
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_manual.mat';
+inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 load(inputFile);
 
 pattern = {'checkerboard', 'spokes'};

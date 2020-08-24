@@ -667,7 +667,7 @@ treatments = evalin("base","treatments");
 appData = handles.appData;
 
 save(fullfile(handles.appData.dataDir, handles.appData.filename),'appData');
-save(fullfile(handles.appData.dataDir,'BlindLandingtracks.mat'),'treatments');
+save(fullfile(handles.appData.dataDir,'BlindLandingtracks_const_rdot.mat'),'treatments');
 
 displayInfo(hObject, handles, 'Data Saved!');
 % Update handles structure
