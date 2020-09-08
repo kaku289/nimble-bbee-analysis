@@ -38,10 +38,37 @@ classdef filteredState_BlindLandingtrack < handle
             p2 = subplot(2,1,2); hold on;
             plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
             ylabel('r (1/s)', 'FontSize', 16);
+            %     ylabel('V_{gy} / y (1/s)', 'FontSize', 16);
             xlabel('y (m)', 'FontSize', 16);
             set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(data4rref(:,6)./data4rref(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(data4rref(:,6)./data4rref(:,3))-1)));
+            %     xticks(p1.XLim(1):0.1:0);
             
             linkaxes([p1, p2],'x');
+            if abs(floor((min(data4rref(:,3))/0.05))*0.05 - min(data4rref(:,3))) > 0.025
+                xmin = floor((min(data4rref(:,3))/0.05))*0.05;
+            else
+                xmin = floor((min(data4rref(:,3))/0.05))*0.05-0.05;
+            end
+            xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                figure(plotHandles(1))
+                subplot(2,1,1);
+                plot(-state_subset(:,3),state_subset(:,6),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_subset(:,3),-obj.rref*-state_subset(:,3),'LineWidth',2,'Color',[69 117 180]./255);
+                plot([0 -state_subset(end,3)],[0 -obj.rref*-state_subset(end,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(2,1,2);
+                plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
+                plot(-state_subset([1,end],3),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
+                plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+            end
             
         end
         

@@ -106,8 +106,8 @@ for ct_pattern = 1:length(pattern)
                           for ct_excerpt=1:length(track.state_LDF) % for each track excerpt
                               excerpt = track.state_LDF(ct_excerpt);
                               
-%                               excerpt.compute_rref(params, factors, time_window);
-                              excerpt.compute_rref_with3dspeed(params, factors, time_window);
+                              excerpt.compute_rref(params, factors, time_window);
+%                               excerpt.compute_rref_with3dspeed(params, factors, time_window);
                               
                               if savePlots
                                   for ct_factor=1:length(factors)
