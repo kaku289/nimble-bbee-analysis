@@ -3,7 +3,7 @@ classdef data4rrefEntry < handle
         
         factor ; % another factor used for thresholding to identify constant r segments
         
-        intervals; % N by 2, where N is the number of non-overlapping time-window independent intervals
+        intervals; % N by 3, where N is the number of non-overlapping time-window independent intervals
         rref; % N nby 1 - linear fit of V vs y with zero intercept 
         vmean; % N by 1
         ymean; % N by 1

@@ -24,6 +24,12 @@ addpath('./lib/flymovieformat');
 % to include hline and vline function
 addpath('./lib/hline_vline');
 
+% to include boxplot2
+addpath('./lib/boxplot2-pkg/boxplot2');
+addpath('./lib/boxplot2-pkg/minmax');
+
+% % to include loSR Surrey for boxplot
+% addpath('./lib/MatlabToolbox');
 %% Find r* entry intervals
 % Also find videos asociated with each track
 
@@ -146,6 +152,208 @@ keyboard
 save(outputFile, 'treatments');
 keyboard;
 
+%% Run estimation of entry dynamics
+% a) data is prefiltered
+% b) estimation is done for individual entry segments
+% c) estimation is done for three orders of transfer functions and 10
+% factors
+
+clc; close all;
+% clear;
+% 
+% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+% load(inputFile);
+treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
+
+
+pattern = {'checkerboard', 'spokes'};
+light = {'low', 'medium', 'high'};
+behaviour = {'rising','constant','sleeping'};
+
+factors = [0.25:0.25:2.5];
+
+data_all = struct.empty;
+
+clear data4est data4est_lowpass estimatedData data1 data1_filtered indexes; clc;
+data4est = cell(length(pattern), length(light), length(factors)); % Unmerged dataset
+data4est_lowpass = cell(length(pattern), length(light), length(factors)); % Unmerged dataset prefiltered with low bandpass filter 
+fc = 5; % cut-off frequency in Hz (used for prefiltering the data)
+
+np = 1:3; % number of poles
+nz = 0; % number of zeros
+nPZ = struc(np, nz);
+nPZ(nPZ(:,2)>nPZ(:,1),:) = [];
+
+opt = tfestOptions('InitializeMethod','all','Display','off','SearchMethod','auto');
+opt.SearchOptions.MaxIterations = 3000;
+warning('off','Ident:estimation:transientDataCorrection')
+warning('off','Ident:idmodel:size4isNotNX')
+parpool
+pause(10)
+parfevalOnAll(gcp(), @warning, 0, 'off', 'Ident:estimation:transientDataCorrection')
+% parfevalOnAll(gcp(), @warning, 0, 'off', 'Ident:idmodel:size4isNotNX')
+tic
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        for ct_behaviour = 2%1:length(behaviour)
+            disp(' ');
+            disp(['Pattern: ' pattern{ct_pattern} ...
+                  ', light: ' light{ct_light} ...
+                  ', behaviour: ' behaviour{ct_behaviour}]);
+        
+           % Selecting relevant treatments
+            if strcmpi(behaviour{ct_behaviour}, 'rising')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)==1);
+            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)>1 & ...
+                                     rem(1:length(treatments), 8)<8);
+            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)==0);
+            else
+                error('What other treatments did you perform dude?')
+            end
+            
+            %%%%%%%%%%%%%% Each light and pattern combination %%%%%%%%%%%
+            landingTracks = [relevantTreatments.landingTracks];
+            state_LDF = [landingTracks.state_LDF];
+            rrefEntrySegs = [state_LDF.rrefEntrySegments];
+            
+            landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+            landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+            
+            % Finding # of "tracks" (state LDFs) that contain rref entry segments
+            % for each factor
+            for ct_fac = 1:length(factors)
+                
+                factor = factors(ct_fac);
+                disp(['Running factor: ' num2str(factor)]);
+                
+                indices = arrayfun(@(x) ~isempty(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-factor)<1e-6).intervals),state_LDF);
+                
+                data_all(ct_pattern, ct_light, ct_fac).tracks_fac = state_LDF(indices);
+                data_all(ct_pattern, ct_light, ct_fac).ct_pattern = ct_pattern;
+                data_all(ct_pattern, ct_light, ct_fac).ct_light = ct_light;
+                data_all(ct_pattern, ct_light, ct_fac).ct_factor = factor;
+                data_all(ct_pattern, ct_light, ct_fac).landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+                
+                % Extract data for system identification
+%                 clear estimatedData;
+                estimatedData.iddata = {};
+                estimatedData_prefiltered.iddata = {};
+                indexes = [];
+                
+                for ct1=1:length(data_all(ct_pattern, ct_light, ct_fac).tracks_fac)
+                    state = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).filteredState;
+                    rrefEntrySegments_fac = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
+                    
+%                     assert(length(rrefEntrySegments_fac) == 1);
+                    for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+                        output = -state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),6)./...
+                            state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),3);
+                        input = -rrefEntrySegments_fac.rmean(ct2)*ones(length(output),1);
+                        dt = mean(diff(state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),1)));
+                        
+                        [num, den] = butter(2, fc/(1/dt/2),'low');
+                        filt_output = filtfilt(num, den, output);
+                        
+                        data1 = iddata(output, input, dt);
+                        data1_filtered = iddata(filt_output, input, dt);
+                        
+                        estimatedData.iddata{end+1} = data1;
+                        estimatedData_prefiltered.iddata{end+1} = data1_filtered;
+                        
+                        indexes(end+1) = ct1;                        
+                    end
+                end
+                data4est{ct_pattern, ct_light, ct_fac} = estimatedData;
+                data4est_lowpass{ct_pattern, ct_light, ct_fac} = estimatedData_prefiltered;
+                
+                data4est{ct_pattern, ct_light, ct_fac}.track_indexes = indexes;
+                data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes = indexes;
+                
+                % Run system Identification
+                dummy = idtf(zeros(0,0,0));
+                for ct2=1:size(nPZ,1)
+                    parfor ct1=1:length(estimatedData_prefiltered.iddata)
+                        dummy(:,:,ct1,ct2) = tfest(estimatedData_prefiltered.iddata{ct1}, nPZ(ct2,1), nPZ(ct2,2), opt);
+                    end
+                end
+                data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest = dummy;
+                
+            end
+            
+           
+            
+        end
+    end
+end
+toc
+keyboard
+
+outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation.mat';
+save(outputFile,'data4est','data4est_lowpass','data_all','');
+keyboard;
+%%
+labels = cell(0, 1); % for x-axis of boxplots
+% pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+% light_label = {'L', 'M', 'H'};
+
+% AICc = cell(length(data),1);
+% labels = cell(length(data),1);
+
+
+    
+for ct_fac=1:length(factors)
+    
+%     AICc = cell(size(nPZ,1),1);
+    fitPercent = cell(size(nPZ,1),1);
+    for ct_order = 1:size(nPZ,1)
+        labels{ct_order, 1} = [num2str(ct_order)];
+        
+        for ct_pattern = 1:length(pattern)
+            for ct_light = 1:length(light)
+                
+                n = length(data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes);
+%                 AICc{ct_order, 1} = [AICc{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AICc,1:n)];
+                fitPercent{ct_order, 1} = [fitPercent{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.FitPercent,1:n)];
+            end
+        end
+
+    end
+%     createBoxPlot(AICc, labels, 'AICc')
+    createBoxPlot(fitPercent, labels, 'FitPercent')
+    title(['Factor = ' num2str(factors(ct_fac))], 'FontSize', 18);
+end
+
+keyboard;
+for ct=1:length(data4est_unmerged)
+    
+    parfor ct1=1:length(data4est_unmerged{ct}.iddata)
+        
+        dummy(:,:,ct1) = tfest(data4est_unmerged{ct}.iddata{ct1}, 2, 0, opt);
+             
+    end
+    data4est_unmerged{ct}.tfest = dummy;
+end
+toc
+
+
+for ct=1%:length(data4est_unmerged)
+%     data4est_unmerged{ct}.tfest(:,:,size(nPZ,1),length(data4est_unmerged{ct}.iddata)) = idtf(zeros(0,0,0));
+    for ct1=1:length(data4est_unmerged{ct}.iddata)
+        for ct2=1:size(nPZ,1)
+            data4est_unmerged{ct}.tfest(:,:,ct2,ct1) = tfest(data4est_unmerged{ct}.iddata{ct1}, nPZ(ct2,1), nPZ(ct2,2), opt);
+        end        
+    end
+end
+
+
 %% Loading data and collecting segments with entry dynamics
 clc; close all;
 % clear;
@@ -164,7 +372,9 @@ chosen_fac = 1;
 
 data = struct.empty;
 % tracks_fac(length(pattern), length(light)) = filteredState_BlindLandingtrack.empty; % tracks for chosen factor
+
 clear dummy;
+
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
@@ -204,7 +414,7 @@ for ct_pattern = 1:length(pattern)
 %             disp(['# of state LDFs (landingTracks): ' num2str(length(state_LDF))]);
 %             disp(['Size of rrefSegment vector: ' num2str(length(rrefSegs))]);
             
-            % Finding # of "tracks" (state LDFs) that contain rref segments
+            % Finding # of "tracks" (state LDFs) that contain rref entry segments
             % for each factor
             N = zeros(1, length(factors));
             for ct_fac = 1:length(factors)
@@ -258,10 +468,16 @@ end
 clear data4est data4est_unmerged; clc;
 data4est = cell(length(data),1); % Merged for sysID
 data4est_unmerged = cell(length(data),1); % Unmerged dataset
+
+data4est_unmerged_lowpass = cell(length(data),1); % Unmerged dataset prefiltered with low bandpass filter 
+fc = 5; % cut-off frequency in Hz (used for prefiltering the data)
+
 for ct=1:length(data)
     clear estimatedData;
 %     estimatedData.tfest = {};
     estimatedData.iddata = {};
+    
+    estimatedData_prefiltered.iddata = {};
 
     for ct1=1:length(data(ct).tracks_fac)
         state = data(ct).tracks_fac(ct1).filteredState;
@@ -274,22 +490,135 @@ for ct=1:length(data)
             input = -rrefEntrySegments_fac.rmean(ct2)*ones(length(output),1);
             dt = mean(diff(state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),1)));
             
+            [num, den] = butter(2, fc/(1/dt/2),'low');
+            filt_output = filtfilt(num, den, output);
+            
             data1 = iddata(output, input, dt);
+            data1_filtered = iddata(filt_output, input, dt);
+            
             if ~isempty(data4est{ct})%exist('data4est','var')
                 data4est{ct} = merge(data4est{ct}, data1);
                 estimatedData.iddata{end+1} = data1;
+                
+                estimatedData_prefiltered.iddata{end+1} = data1_filtered;
 %                 estimatedData.tfest{end+1} = idtf(zeros(0,0,0));
 %                 data4est_unmerged{ct}{end+1} = data1;
             else
                 data4est{ct} = data1;
                 estimatedData.iddata{1} = data1;
+                
+                estimatedData_prefiltered.iddata{end+1} = data1_filtered;
+
 %                 estimatedData.tfest{1} = idtf(zeros(0,0,0));
 %                 data4est_unmerged{ct}{1} = data1;
             end
         end
     end
     data4est_unmerged{ct} = estimatedData;
+    
+    data4est_unmerged_lowpass{ct} = estimatedData_prefiltered;
 end
+
+% % Testing filter order % %
+% fc = 5;
+% [num, den] = butter(2, fc/(1/dt/2),'low');
+% filt_output2 = filtfilt(num, den, output);
+% 
+% [num, den] = butter(3, fc/(1/dt/2),'low');
+% filt_output3 = filtfilt(num, den, output);
+% 
+% [num, den] = butter(4, fc/(1/dt/2),'low');
+% filt_output4 = filtfilt(num, den, output);
+% 
+% plot(output); hold on; plot(filt_output2,'r'); plot(filt_output3,'g'); plot(filt_output4,'k');
+
+% % comparing filtered and actual data % % 
+close all;
+ct = 422;
+cond = 6;
+plot(data4est_unmerged{cond}.iddata{ct}); hold on;
+plot(data4est_unmerged_lowpass{cond}.iddata{ct});
+
+%% create plots for plotting low-pass filtered data with "actual" data
+
+% find indexes of landing tracks for each rrefEntrySegment
+clear indexes;
+for ct=1:length(data)
+    indexes = [];
+    for ct1=1:length(data(ct).tracks_fac)
+        state = data(ct).tracks_fac(ct1).filteredState;
+        rrefEntrySegments_fac = data(ct).tracks_fac(ct1).rrefEntrySegments(abs([data(ct).tracks_fac(ct1).rrefEntrySegments.factor]-chosen_fac)<1e-6);
+        
+        assert(length(rrefEntrySegments_fac) == 1);
+        for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+            indexes(end+1) = ct1;
+            
+            
+        end
+    end
+    data4est_unmerged{ct}.track_indexes = indexes;
+end
+
+% create validation plot of system identification for each trackfor ct_fac=10%1:length(factors) % Create plot for each factor
+
+DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_lowpassfiltered_vs_actual';
+delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = false;
+savePDFs = false;
+
+pattern = {'checkerboard', 'spokes'};
+light = {'low', 'medium', 'high'};
+behaviour = {'rising','constant','sleeping'};
+
+
+chosen_fac = 1;        
+for ct=1:length(data)
+    % Delete previous plots
+    if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]), 'dir')
+        rmdir(fullfile(DirPlots, [pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]),'s');
+    end
+    
+    % Create sub-directory for each treatment if it doesn't exist
+    if savePlots && ~exist(fullfile(DirPlots, [pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]), 'dir')
+        mkdir(fullfile(DirPlots, [pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]));
+    end
+    DirPlots_treatment = fullfile(DirPlots, [pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]);
+    
+    for ct1=1:length(data(ct).tracks_fac)
+        % create tf vector in order of rrefEntrySegments
+%         tfs = data4est_unmerged{ct}.tfest(:,:,data4est_unmerged{ct}.track_indexes == ct1);
+        
+        % plot data
+        plotHandles = data(ct).tracks_fac(ct1).plot_rrefsEntry_actual_vs_filtered(chosen_fac, fc);
+
+        if ~isempty(plotHandles)
+            
+            % Resizing the figures
+            for i=1:length(plotHandles)
+                plotHandles(i).Position(3) = 680;
+                plotHandles(i).Position(4) = 545;
+                
+                if i==1
+                    figureName = ['fac_' num2str(chosen_fac,'%0.2f') ...
+                         '_track' ...
+                        num2str(ct1) ...
+                        '.png'];
+                end
+                
+                saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
+                
+                if savePDFs
+                    print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
+                        '.png','.pdf'), '-dpdf');
+                end
+            end
+            
+            close(plotHandles);
+        end
+
+    end
+end
+
 
 %% Estimate models 
 % Models to be tried
@@ -323,7 +652,7 @@ for ct=1%:length(data4est_unmerged)
     end
 end
 
-%% Using specific model (np=2, nz=0)
+%% Using specific model (np=2, nz=0) - unfiltered data
 % Estimation on individual tracks
 opt = tfestOptions('InitializeMethod','all','Display','off','SearchMethod','auto');
 opt.SearchOptions.MaxIterations = 3000;
@@ -380,7 +709,8 @@ for ct=1:length(data)
     data4est_unmerged{ct}.track_indexes = indexes;
 end
 
-% create validation plot of system identification for each track
+% create validation plot of system identification for each trackfor ct_fac=10%1:length(factors) % Create plot for each factor
+
 DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_sysIdentified_onIndividualTracks';
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
 savePlots = false;
@@ -391,7 +721,6 @@ light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 
 
-        
 for ct=1:length(data)
     % Delete previous plots
     if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]), 'dir')
@@ -464,9 +793,9 @@ for ct=1:length(data)
     P3{ct,1} = fitParameters{ct, 1}(:,3);
 end
 
-fitParameter1_figHandle = createBoxPlot(P1, labels, 'P1');
-fitParameter2_figHandle = createBoxPlot(P2, labels, 'P2');
-fitParameter3_figHandle = createBoxPlot(P3, labels, 'P3');
+fitParameter1_figHandle = createBoxPlot(P1, labels, 'P1'); ylim([-Inf 1000])
+fitParameter2_figHandle = createBoxPlot(P2, labels, 'P2'); ylim([-Inf 1000])
+fitParameter3_figHandle = createBoxPlot(P3, labels, 'P3'); ylim([-Inf 1000])
 
 %% Finding average step response
 t = 0:0.005:1;
@@ -684,6 +1013,674 @@ for ct_pattern = 1:length(pattern)
     end
 end
 
+%% Correlation of increase/decrease in r with increase/decrease in V
+data4correlation = cell(length(data),1);
+mean_ay = cell(length(data),1);
+delta_r = cell(length(data),1);
+delta_V = cell(length(data),1);
+delta_y = cell(length(data),1);
+
+for ct=1:length(data)
+    
+    for ct1=1:length(data(ct).tracks_fac)
+        state = data(ct).tracks_fac(ct1).filteredState;
+        y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3);
+        
+        rrefEntrySegments_fac = data(ct).tracks_fac(ct1).rrefEntrySegments(abs([data(ct).tracks_fac(ct1).rrefEntrySegments.factor]-chosen_fac)<1e-6);
+        
+        assert(length(rrefEntrySegments_fac) == 1);
+        for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+            entryStart_indx = rrefEntrySegments_fac.intervals(ct2,1);
+            entryEnd_indx = rrefEntrySegments_fac.intervals(ct2,2);
+            
+            if ~isempty(data4correlation{ct})
+                data4correlation{ct}.data{end+1} = [y(entryStart_indx) V(entryStart_indx) r(entryStart_indx);
+                                       y(entryEnd_indx)   V(entryEnd_indx)   -rrefEntrySegments_fac.rmean(ct2)];
+                mean_ay{ct}(end+1) = mean(ay(entryStart_indx:entryEnd_indx));
+                delta_r{ct}(end+1) = -rrefEntrySegments_fac.rmean(ct2) - r(entryStart_indx);
+                delta_V{ct}(end+1) = V(entryEnd_indx) - V(entryStart_indx);
+                delta_y{ct}(end+1) = y(entryEnd_indx) - y(entryStart_indx);
+            else
+                data4correlation{ct}.data{1} = [y(entryStart_indx) V(entryStart_indx) r(entryStart_indx);
+                                       y(entryEnd_indx)   V(entryEnd_indx)   -rrefEntrySegments_fac.rmean(ct2)];
+                mean_ay{ct}(1) = mean(ay(entryStart_indx:entryEnd_indx));
+                delta_r{ct}(1) = -rrefEntrySegments_fac.rmean(ct2) - r(entryStart_indx);
+                delta_V{ct}(1) = V(entryEnd_indx) - V(entryStart_indx);
+                delta_y{ct}(1) = y(entryEnd_indx) - y(entryStart_indx);
+            end
+        end
+    end
+end
+close all;
+figure; hold on;
+plot(horzcat(delta_r{:}), horzcat(mean_ay{:}),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+yline(0); xline(0);
+ylabel('mean ay during entry (ms-2)', 'FontSize', 16);
+xlabel('r* - r1 (s-1)', 'FontSize', 16);
+set(gca, 'FontSize', 16); %grid on;
+
+figure; hold on;
+plot(horzcat(delta_V{:}), horzcat(mean_ay{:}),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+yline(0); xline(0);
+ylabel('mean ay during entry (ms-2)', 'FontSize', 16);
+xlabel('V2 - V1 (ms-1)', 'FontSize', 16);
+set(gca, 'FontSize', 16); %grid on;
+
+figure; hold on;
+plot(horzcat(delta_y{:}), horzcat(delta_r{:}),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+yline(0); xline(0);
+ylabel('r* - r1 (s-1)', 'FontSize', 16);
+xlabel('y2 - y1 (ms-1)', 'FontSize', 16);
+set(gca, 'FontSize', 16); %grid on;
+
+sum(horzcat(mean_ay{:}) > 0 & horzcat(delta_r{:}) > 0)/sum(horzcat(delta_r{:}) > 0)
+sum(horzcat(mean_ay{:}) < 0 & horzcat(delta_r{:}) < 0)/sum(horzcat(delta_r{:}) < 0)
+%% ONLY PRE FILTERED DATA is used in the code below %%%%%%%
+%% Using specific model (np=2, nz=0) - prefiltered data
+% Estimation on individual tracks
+opt = tfestOptions('InitializeMethod','all','Display','off','SearchMethod','auto');
+opt.SearchOptions.MaxIterations = 3000;
+warning('off','Ident:estimation:transientDataCorrection')
+clear dummy;
+tic
+for ct=1:length(data4est_unmerged_lowpass)
+    
+    parfor ct1=1:length(data4est_unmerged_lowpass{ct}.iddata)
+        
+        dummy(:,:,ct1) = tfest(data4est_unmerged_lowpass{ct}.iddata{ct1}, 2, 0, opt);
+             
+    end
+    data4est_unmerged_lowpass{ct}.tfest = dummy;
+end
+toc
+
+%% Using specific model (np=2, nz=0) - prefiltered data
+% Estimation on individual tracks
+opt = tfestOptions('InitializeMethod','all','Display','off','SearchMethod','auto','InitialCondition','estimate');
+opt.SearchOptions.MaxIterations = 3000;
+warning('off','Ident:estimation:transientDataCorrection')
+clear dummy;
+tic
+for ct=1:length(data4est_unmerged_lowpass)
+    
+    parfor ct1=1:length(data4est_unmerged_lowpass{ct}.iddata)
+        
+        dummy(:,:,ct1) = tfest(data4est_unmerged_lowpass{ct}.iddata{ct1}, 2, 0, opt);
+             
+    end
+    data4est_unmerged_lowpass{ct}.tfest2 = dummy;
+end
+toc
+
+%% create plots for estimation on individual tracks - prefiltered data
+% fit percent plot
+labels = cell(0, 1); % for x-axis of boxplots
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
+
+fitPercentData = cell(length(data),1);
+labels = cell(length(data),1);
+
+for ct=1:length(data)
+    
+    labels{ct, 1} = [light_label{data(ct).ct_light} '' pattern_label{data(ct).ct_pattern}];
+    
+    
+    fitPercentData{ct, 1} = arrayfun(@(x)  data4est_unmerged_lowpass{ct}.tfest(:,:,x).Report.Fit.FitPercent,1:length(data4est_unmerged_lowpass{ct}.tfest));
+    
+end
+fitPercentData_figHandle = createBoxPlot(fitPercentData, labels, 'Fit percent');
+
+%% create plots for estimation on individual tracks - prefiltered data
+% Free Parameters box plots
+labels = cell(0, 1); % for x-axis of boxplots
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
+
+fitParameters = cell(length(data),1);
+P1 = cell(length(data),1);
+P2 = cell(length(data),1);
+P3 = cell(length(data),1);
+labels = cell(length(data),1);
+clear dummy;
+for ct=1:length(data)
+    
+    labels{ct, 1} = [light_label{data(ct).ct_light} '' pattern_label{data(ct).ct_pattern}];
+    
+    dummy = arrayfun(@(x)  data4est_unmerged_lowpass{ct}.tfest(:,:,x).Report.Parameters.ParVector, 1:length(data4est_unmerged_lowpass{ct}.tfest), 'UniformOutput', false);
+    fitParameters{ct, 1} = horzcat(dummy{:})';
+    assert(all(fitParameters{ct, 1}(:,4) == 0));
+    
+    P1{ct,1} = fitParameters{ct, 1}(:,1);
+    P2{ct,1} = fitParameters{ct, 1}(:,2);
+    P3{ct,1} = fitParameters{ct, 1}(:,3);
+end
+close all;
+fitParameter1_figHandle = createBoxPlot(P1, labels, 'P1'); ylim([-Inf 1000])
+fitParameter2_figHandle = createBoxPlot(P2, labels, 'P2'); ylim([-Inf 60])
+fitParameter3_figHandle = createBoxPlot(P3, labels, 'P3'); ylim([-Inf 1000])
+
+%% Estimation based on PRE FILTERED DATA is used in the code below %%%%%%%
+%% Estimation on individual tracks based on median values of parameters obtained from previous step
+opt = tfestOptions('Display','off');
+opt.SearchOptions.MaxIterations = 3000;
+warning('off','Ident:estimation:transientDataCorrection')
+clear dummy init_sys;
+
+tic
+for ct=1:length(data4est_unmerged_lowpass)
+    num = median(P1{ct});
+    den = [1 median(P2{ct}) median(P3{ct})];
+    init_sys(:,:,ct) = idtf(num, den);
+    
+    parfor ct1=1:length(data4est_unmerged_lowpass{ct}.iddata)
+        
+        dummy(:,:,ct1) = tfest(data4est_unmerged_lowpass{ct}.iddata{ct1}, init_sys(:,:,ct));
+             
+    end
+    data4est_unmerged_lowpass{ct}.tfest_refined = dummy;
+end
+toc
+
+%% create plots for estimation on individual tracks - prefiltered data
+% fit percent plot
+labels = cell(0, 1); % for x-axis of boxplots
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
+
+fitPercentData = cell(length(data),1);
+labels = cell(length(data),1);
+
+for ct=1:length(data)
+    
+    labels{ct, 1} = [light_label{data(ct).ct_light} '' pattern_label{data(ct).ct_pattern}];
+    
+    
+    fitPercentData{ct, 1} = arrayfun(@(x)  data4est_unmerged_lowpass{ct}.tfest_refined(:,:,x).Report.Fit.FitPercent,1:length(data4est_unmerged_lowpass{ct}.tfest));
+    
+end
+fitPercentData_figHandle = createBoxPlot(fitPercentData, labels, 'Fit percent');
+
+%% create plots for estimation on individual tracks - prefiltered data
+% Free Parameters box plots
+labels = cell(0, 1); % for x-axis of boxplots
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
+
+fitParameters = cell(length(data),1);
+P1_refined = cell(length(data),1);
+P2_refined = cell(length(data),1);
+P3_refined = cell(length(data),1);
+labels = cell(length(data),1);
+clear dummy;
+for ct=1:length(data)
+    
+    labels{ct, 1} = [light_label{data(ct).ct_light} '' pattern_label{data(ct).ct_pattern}];
+    
+    dummy = arrayfun(@(x)  data4est_unmerged_lowpass{ct}.tfest_refined(:,:,x).Report.Parameters.ParVector, 1:length(data4est_unmerged_lowpass{ct}.tfest), 'UniformOutput', false);
+    fitParameters{ct, 1} = horzcat(dummy{:})';
+    assert(all(fitParameters{ct, 1}(:,4) == 0));
+    
+    P1_refined{ct,1} = fitParameters{ct, 1}(:,1);
+    P2_refined{ct,1} = fitParameters{ct, 1}(:,2);
+    P3_refined{ct,1} = fitParameters{ct, 1}(:,3);
+end
+% close all;
+fitParameter1_figHandle = createBoxPlot(P1_refined, labels, 'P1'); ylim([-Inf 1000])
+fitParameter2_figHandle = createBoxPlot(P2_refined, labels, 'P2'); ylim([-Inf 60])
+fitParameter3_figHandle = createBoxPlot(P3_refined, labels, 'P3'); ylim([-Inf 1000])
+
+%% Plot "rise" times in different environmental conditions
+
+clc; close all;
+% clear;
+% 
+% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+% load(inputFile);
+treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
+
+
+pattern = {'checkerboard', 'spokes'};
+light = {'low', 'medium', 'high'};
+behaviour = {'rising','constant','sleeping'};
+
+factors = [0.25:0.25:2.5];
+
+data_all = struct.empty;
+
+rPercentIntervalsACC = 10:20:90; % in percent of r*
+rPercentIntervalsDEC = 190:-10:110; % in percent of r*
+
+rIntervals = 0.5:0.5:10; % in terms of r
+
+% Performance parameters
+risetimesACC = cell.empty;
+distanceACC = cell.empty;
+velocityACC = cell.empty;
+accACC = cell.empty;
+meanVelocityACC = cell.empty;
+meanAccACC = cell.empty;
+meanRdotACC = cell.empty;
+rrefACC = cell.empty;
+approachACC = cell.empty;
+landingSideACC = cell.empty;
+timeACC = cell.empty;
+dayACC = cell.empty;
+
+risetimesDEC = cell.empty;
+distanceDEC = cell.empty;
+velocityDEC = cell.empty;
+accDEC = cell.empty;
+meanVelocityDEC = cell.empty;
+meanAccDEC = cell.empty;
+meanRdotDEC = cell.empty;
+rrefDEC = cell.empty;
+approachDEC = cell.empty;
+landingSideDEC = cell.empty;
+timeDEC = cell.empty;
+dayDEC = cell.empty;
+
+entryData = cell.empty;
+
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        for ct_behaviour = 2%1:length(behaviour)
+            disp(' ');
+            disp(['Pattern: ' pattern{ct_pattern} ...
+                  ', light: ' light{ct_light} ...
+                  ', behaviour: ' behaviour{ct_behaviour}]);
+        
+           % Selecting relevant treatments
+            if strcmpi(behaviour{ct_behaviour}, 'rising')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)==1);
+            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)>1 & ...
+                                     rem(1:length(treatments), 8)<8);
+            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)==0);
+            else
+                error('What other treatments did you perform dude?')
+            end
+            
+            %%%%%%%%%%%%%% Each light and pattern combination %%%%%%%%%%%
+            landingTracks = [relevantTreatments.landingTracks];
+            state_LDF = [landingTracks.state_LDF];
+            rrefEntrySegs = [state_LDF.rrefEntrySegments];
+            
+            landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+            landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+            
+            % Finding # of "tracks" (state LDFs) that contain rref entry segments
+            % for each factor
+            for ct_fac = 1:length(factors)
+                factor = factors(ct_fac);
+                indices = arrayfun(@(x) ~isempty(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-factor)<1e-6).intervals),state_LDF);
+                
+                data_all(ct_pattern, ct_light, ct_fac).tracks_fac = state_LDF(indices);
+                data_all(ct_pattern, ct_light, ct_fac).ct_pattern = ct_pattern;
+                data_all(ct_pattern, ct_light, ct_fac).ct_light = ct_light;
+                data_all(ct_pattern, ct_light, ct_fac).ct_factor = factor;
+                data_all(ct_pattern, ct_light, ct_fac).landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+                
+                risetimesACC{ct_pattern, ct_light, ct_fac} = [];
+                distanceACC{ct_pattern, ct_light, ct_fac} = [];
+                velocityACC{ct_pattern, ct_light, ct_fac} = [];
+                accACC{ct_pattern, ct_light, ct_fac} = [];
+                meanVelocityACC {ct_pattern, ct_light, ct_fac} = [];
+                meanAccACC{ct_pattern, ct_light, ct_fac} = [];
+                meanRdotACC{ct_pattern, ct_light, ct_fac} = [];
+                rrefACC{ct_pattern, ct_light, ct_fac} = [];
+                approachACC{ct_pattern, ct_light, ct_fac} = [];
+                landingSideACC{ct_pattern, ct_light, ct_fac} = [];
+                timeACC{ct_pattern, ct_light, ct_fac} = [];
+                dayACC{ct_pattern, ct_light, ct_fac} = [];
+
+                risetimesDEC{ct_pattern, ct_light, ct_fac} = [];
+                distanceDEC{ct_pattern, ct_light, ct_fac} = [];
+                velocityDEC{ct_pattern, ct_light, ct_fac} = [];
+                accDEC{ct_pattern, ct_light, ct_fac} = [];
+                meanVelocityDEC{ct_pattern, ct_light, ct_fac} = [];
+                meanAccDEC{ct_pattern, ct_light, ct_fac} = [];
+                meanRdotDEC{ct_pattern, ct_light, ct_fac} = [];
+                rrefDEC{ct_pattern, ct_light, ct_fac} = [];
+                approachDEC{ct_pattern, ct_light, ct_fac} = [];
+                landingSideDEC{ct_pattern, ct_light, ct_fac} = [];
+                timeDEC{ct_pattern, ct_light, ct_fac} = [];
+                dayDEC{ct_pattern, ct_light, ct_fac} = [];
+
+                entryData{ct_fac} = [];
+                
+                for ct1=1:sum(indices) % for each state_LDF
+                    state = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).filteredState;
+                    y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3); t = state(:,1)-state(1,1);
+                    rdot = diffxy(t, r);
+                    
+                    rrefEntrySegments_fac = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
+                    
+                    for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+                        entryStart_indx = rrefEntrySegments_fac.intervals(ct2,1);
+                        entryEnd_indx = rrefEntrySegments_fac.intervals(ct2,2);
+                        
+                        rref = -rrefEntrySegments_fac.rmean(ct2);
+                        V_part = V(entryStart_indx:entryEnd_indx); ay_part = ay(entryStart_indx:entryEnd_indx); rdot_part = rdot(entryStart_indx:entryEnd_indx);
+                        
+                        entryData{ct_fac} = [entryData{ct_fac}; ...
+                                              t(entryStart_indx:entryEnd_indx)  y(entryStart_indx:entryEnd_indx) ...
+                                              V(entryStart_indx:entryEnd_indx)  ay(entryStart_indx:entryEnd_indx) ...
+                                              r(entryStart_indx:entryEnd_indx)  rdot(entryStart_indx:entryEnd_indx) ...
+                                              rref*ones(entryEnd_indx-entryStart_indx+1,1)];
+                        
+                        if r(entryStart_indx) > rref % populate risetimesDEC
+                            rBinValues = rPercentIntervalsDEC*rref/100;
+%                             rBinValues = rIntervals;
+                            t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                            risetimesDEC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(t_at_rBinValues);
+                            
+                            %                     if any(diff(t_at_rBinValues) < 0)
+                            %                         keyboard;
+                            %                     end
+                            
+                        elseif r(entryStart_indx) < rref % populate risetimesACC
+                            rBinValues = rPercentIntervalsACC*rref/100;
+%                             rBinValues = rIntervals;
+                            
+                            t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                            y_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), y(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                            V_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), V(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                            a_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), ay(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                            
+                            risetimesACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(t_at_rBinValues);
+                            distanceACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(y_at_rBinValues);
+                            velocityACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(V_at_rBinValues);
+                            accACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(a_at_rBinValues);
+                            
+                            meanVelocityACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(V_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues); % + diff(t_at_rBinValues) - diff(t_at_rBinValues) is used to make values nan where diff(t_at_rBinValues) is also nan 
+                            meanAccACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(ay_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues);
+                            meanRdotACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(rdot_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues);
+                            rrefACC{ct_pattern, ct_light, ct_fac}(end+1,:) = rref*ones(1,length(rBinValues)-1);
+                            
+                            approachACC{ct_pattern, ct_light, ct_fac}(end+1,:) = ct1*ones(1,length(rBinValues)-1);
+                            if strcmpi(data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).landingSide,"Hive")
+                                landingSideACC{ct_pattern, ct_light, ct_fac}(end+1,:) = 1*ones(1,length(rBinValues)-1);
+                            elseif strcmpi(data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).landingSide,"Feeder")
+                                landingSideACC{ct_pattern, ct_light, ct_fac}(end+1,:) = 2*ones(1,length(rBinValues)-1);
+                            end
+                            timeACC{ct_pattern, ct_light, ct_fac}(end+1,:) = str2double(data_all(ct_pattern, ct_light, ct_fac).landingTrack(ct1).foldername(10:13))*ones(1,length(rBinValues)-1);
+                            dayACC{ct_pattern, ct_light, ct_fac}(end+1,:) = data_all(ct_pattern, ct_light, ct_fac).landingTrack(ct1).datenum*ones(1,length(rBinValues)-1);
+                           
+                        end
+                        
+                    end
+                    
+                end
+
+            end
+        end
+    end
+end
+%% Write files for statistical analysis in R
+% writing percentage change in r file
+% required columns =
+clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
+data_write = [];
+
+nBins = length(rBinValues)-1;
+
+for ct_fac=4%1:length(factors)
+    factor = factors(ct_fac);
+    approach_number = 0;
+    
+    for ct_pattern = 1:length(pattern)
+        for ct_light = 1:length(light)
+            
+            rBins = repmat(1:nBins, size(approachACC{ct_pattern, ct_light, ct_fac},1), 1);
+            N = numel(rBins);
+            % collecting column-wise i.e., for each rbin
+            data_write = [data_write; ... 
+                          rBins(:) ct_pattern*ones(N,1) ct_light*ones(N,1) ...
+                          risetimesACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          distanceACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          velocityACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanVelocityACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanAccACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanRdotACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          rrefACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          approach_number+approachACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          landingSideACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          timeACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          dayACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          factor*ones(N,1)];
+                      
+           approach_number = approach_number + max(approachACC{ct_pattern, ct_light, ct_fac}(:));
+        end
+    end
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'rbins', 'pattern', 'light', 'delta_t', 'delta_y', 'delta_V', 'mean_V', 'mean_a', 'mean_rdot', 'rref', ...
+                         'approach','landingSide','time','day','factor'});
+    writetable(T,r_file);
+end
+
+
+% writing absolute change in r file
+%%
+% close all;
+meanRisetimes = cellfun(@(x) nanmean(x) ,risetimesACC,'UniformOutput' ,false);
+medianRisetimes = cellfun(@(x) nanmedian(x) ,risetimesACC,'UniformOutput' ,false);
+nValues = cellfun(@(x) sum(~isnan(x)) ,risetimesACC,'UniformOutput' ,false);
+
+nx = size(risetimesACC{1,1,1},2);
+ny = 3;
+cmap = [120 120 120; 67,162,202; 245 130 46]./255;
+
+for ct_fac=6%1:length(factors) % Create plot for each factor
+    
+    figure;
+    subplot(2,1,1);
+    ndata = max([size(risetimesACC{1,1,ct_fac},1) size(risetimesACC{1,2,ct_fac},1) size(risetimesACC{1,3,ct_fac},1)]);
+%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],risetimesACC(1,1:3,ct_fac),'un',0);
+    y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],meanVelocityACC(1,1:3,ct_fac),'un',0);
+%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],distanceACC(1,1:3,ct_fac),'un',0);
+    y = cat(3,y{:}); % Concatenating along third dimension
+    
+%     y = permute(y, [2 3 1]);
+%     h1 = boxplot2(y); 
+%     for ii = 1:ny
+%         structfun(@(x) set(x(ii,:), 'color', cmap(ii,:), ...
+%             'markeredgecolor', cmap(ii,:)), h1);
+%     end
+%     set([h1.lwhis h1.uwhis], 'linestyle', '-');
+%     set(h1.out, 'marker', '.');
+    
+    y = permute(y, [1 2 3 ]);
+% 	xlabels = arrayfun(@(x) [num2str(rIntervals(x),'%0.1f') '-' num2str(rIntervals(x+1),'%0.1f')], 1:nx,'un',0);
+	xlabels = arrayfun(@(x) [num2str(rPercentIntervalsACC(x),'%2.0f') '-' num2str(rPercentIntervalsACC(x+1),'%2.0f') '%r*'], 1:nx,'un',0);
+    h1 = iosr.statistics.boxPlot(y, 'sampleSize', true, 'showMean', true, 'symbolMarker', '.','x', xlabels);
+    h1.lineColor{1} = cmap(1,:); h1.lineColor{2} = cmap(2,:); h1.lineColor{3} = cmap(3,:); 
+    h1.meanColor{1} = cmap(1,:); h1.meanColor{2} = cmap(2,:); h1.meanColor{3} = cmap(3,:); 
+    h1.medianColor{1} = cmap(1,:); h1.medianColor{2} = cmap(2,:); h1.medianColor{3} = cmap(3,:); 
+    h1.symbolColor{1} = cmap(1,:); h1.symbolColor{2} = cmap(2,:); h1.symbolColor{3} = cmap(3,:); 
+    h1.GroupLabels = {{'L', 'M', 'H'}};
+    h1.showLegend = true;
+    title('checkerboard');
+%     ylabel('delta t');
+    ylabel('mean V');
+
+%     set(gca, 'FontSize', 18);
+%     h1.x = ;
+%     h1.boxColor{1} = cmap(1,:); h1.boxColor{2} = cmap(2,:); h1.boxColor{3} = cmap(3,:); 
+
+    subplot(2,1,2);
+    ndata = max([size(risetimesACC{2,1,ct_fac},1) size(risetimesACC{2,2,ct_fac},1) size(risetimesACC{2,3,ct_fac},1)]);
+%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],risetimesACC(2,1:3,ct_fac),'un',0);
+    y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],meanVelocityACC(2,1:3,ct_fac),'un',0);
+%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],distanceACC(2,1:3,ct_fac),'un',0);
+    y = cat(3,y{:}); % Concatenating along third dimension
+    
+    y = permute(y, [1 2 3 ]);
+    h1 = iosr.statistics.boxPlot(y, 'sampleSize', true, 'showMean', true, 'symbolMarker', '.','x', xlabels);
+    h1.lineColor{1} = cmap(1,:); h1.lineColor{2} = cmap(2,:); h1.lineColor{3} = cmap(3,:); 
+    h1.meanColor{1} = cmap(1,:); h1.meanColor{2} = cmap(2,:); h1.meanColor{3} = cmap(3,:); 
+    h1.medianColor{1} = cmap(1,:); h1.medianColor{2} = cmap(2,:); h1.medianColor{3} = cmap(3,:); 
+    h1.symbolColor{1} = cmap(1,:); h1.symbolColor{2} = cmap(2,:); h1.symbolColor{3} = cmap(3,:); 
+%     ylabel('delta t');
+    ylabel('mean V');
+%     set(gca, 'FontSize', 18);
+    title('spoke');
+end
+    
+%% plot rref, r and rdot 3D-plot
+for ct_fac=4%1:length(factors) % Create plot for each factor
+    plot3(entryData{ct_fac}(:,7), entryData{ct_fac}(:,5), entryData{ct_fac}(:,6),'.')
+    xlabel('r*', 'FontSize', 16);
+    ylabel('r', 'FontSize', 16);
+    zlabel('rdot', 'FontSize', 16);
+    set(gca, 'FontSize', 18); grid on;
+    
+    
+    figure;
+    plot(entryData{ct_fac}(:,5), entryData{ct_fac}(:,3),'.');
+end
+
+%%
+close all;
+meanRisetimes = cellfun(@(x) nanmean(x) ,risetimesACC,'UniformOutput' ,false);
+medianRisetimes = cellfun(@(x) nanmedian(x) ,risetimesACC,'UniformOutput' ,false);
+nValues = cellfun(@(x) sum(~isnan(x)) ,risetimesACC,'UniformOutput' ,false);
+
+% meanPlot = figure;
+% medianPlot = figure;
+
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        n = size(risetimesACC{1,1,1},2);
+        meanrisetimes = vertcat(meanRisetimes{ct_pattern, ct_light, :});
+        medianrisetimes = vertcat(medianRisetimes{ct_pattern, ct_light, :});
+        
+        figure;
+        
+        for ct=1:n
+            subplot(n,1,ct);
+            plot(factors, meanrisetimes(:,ct),'Linewidth',2);
+%             plot(factors, medianrisetimes(:,ct),'Linewidth',2);
+            ylabel([num2str(rPercentIntervalsACC(ct)) '-' num2str(rPercentIntervalsACC(ct+1)) '% r*']);
+            ylabel([num2str(rIntervals(ct)) '-' num2str(rIntervals(ct+1)) '% r*']);
+            xlim([factors(1) factors(end)]);
+            if ct==1
+                title(['Pattern: ' pattern{ct_pattern} ', light: ' light{ct_light}], 'FontSize', 16);
+            end
+        end
+        xlabel('factor f', 'FontSize', 16);
+%         set(gca, 'FontSize', 16);
+        
+    end
+end
+
+meanRisetimes = vertcat(meanRisetimes{:});
+
+
+medianRisetimes = vertcat(medianRisetimes{:});
+
+
+n = vertcat(n{:});
+
+
+
+for ct=1:length(data)
+    
+    risetimesDEC{ct, length(factors)} = [];
+    risetimesACC{ct, length(factors)} = [];
+    
+    for ct1=1:length(data(ct).tracks_fac)
+        state = data(ct).tracks_fac(ct1).filteredState;
+        y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3); t = state(:,1)-state(1,1);
+        
+        for ct_factor=1:length(factors)
+            fac = factors(ct_factor);
+        
+            rrefEntrySegments_fac = data(ct).tracks_fac(ct1).rrefEntrySegments(abs([data(ct).tracks_fac(ct1).rrefEntrySegments.factor]-fac)<1e-6);
+        
+            assert(length(rrefEntrySegments_fac) == 1);
+            for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+                entryStart_indx = rrefEntrySegments_fac.intervals(ct2,1);
+                entryEnd_indx = rrefEntrySegments_fac.intervals(ct2,2);
+
+                rref = -rrefEntrySegments_fac.rmean(ct2);
+            
+            
+                if r(entryStart_indx) > rref % populate risetimesDEC
+                    rBinValues = rPercentIntervalsDEC*rref/100;
+                    t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                    risetimesDEC{ct, ct_factor}(end+1,:) = diff(t_at_rBinValues);
+
+%                     if any(diff(t_at_rBinValues) < 0)
+%                         keyboard;
+%                     end
+
+                elseif r(entryStart_indx) < rref % populate risetimesACC
+                    rBinValues = rPercentIntervalsACC*rref/100;
+                    t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                    risetimesACC{ct, ct_factor}(end+1,:) = diff(t_at_rBinValues);
+
+%                     if any(diff(t_at_rBinValues) < 0)
+%                         keyboard;
+%                     end
+
+                end
+            
+            end
+        end
+    end
+end
+keyboard
+meanRisetimes = cellfun(@(x) nanmean(x) ,risetimesACC,'UniformOutput' ,false);
+meanRisetimes = vertcat(meanRisetimes{:});
+
+medianRisetimes = cellfun(@(x) nanmedian(x) ,risetimesACC,'UniformOutput' ,false);
+medianRisetimes = vertcat(medianRisetimes{:});
+
+n = cellfun(@(x) sum(~isnan(x)) ,risetimesACC,'UniformOutput' ,false);
+n = vertcat(n{:});
+
+figure; histogram(risetimesACC{4}(:,8));
+figure; histogram(risetimesACC{5}(:,8));
+figure; histogram(risetimesACC{6}(:,8));
+
+
+close all;
+figure; boxplot2(risetimesACC{1}, 10:10:80); ylim([0 0.1]);
+figure; boxplot2(risetimesACC{2}, [10:10:80] + 5);  ylim([0 0.1]);
+figure; boxplot2(risetimesACC{3}, [10:10:80] + 10);  ylim([0 0.1]);
+
+LowLight_xvalues_acc = 14:10:84;
+LowLight_xvalues_dec = 114:10:194;
+
+for ct_pattern = 1:2
+    indexes = find([data.ct_pattern] == ct_pattern);
+    
+    risetimesACC_plot = risetimesACC{indexes};
+    xvalues = [LowLight_xvalues_acc LowLight_xvalues_acc+1 LowLight_xvalues_acc+2];
+    
+%     risetimesDEC_plot = risetimesDEC{indexes};
+    
+    
+end
 %%
 fig_checkerboard = figure; hold on;
 fig_spoke = figure; hold on;
@@ -752,7 +1749,7 @@ function figHandle = createBoxPlot(variable, labels, yxislabel)
     boxplot2(variable, 'Labels', labels, 'OutlierSize', 0.00001);
 %     hbox = gca;
     set(gca, 'FontSize', 18); grid on;
-    xlabel('Treatments', 'FontSize', 18);
+%     xlabel('Treatments', 'FontSize', 18);
     ylabel(yxislabel, 'FontSize', 18);
     % ylim([0 1.5]);
     for ct = 1:length(variable)
