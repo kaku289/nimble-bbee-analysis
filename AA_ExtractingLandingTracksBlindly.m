@@ -26,15 +26,20 @@ addpath('./lib/flymovieformat');
 addpath('./lib/hline_vline');
 
 %% User inputs
-rootDir = '/media/reken001/Disk_08_backup/light_intensity_experiments/';
+if isunix
+    rootDir = '/media/reken001/Disk_07/steady_wind_experiments/';
+elseif ispc
+    rootDir = 'D:/steady_wind_experiments';
+end
 
 %% Initializing variables
 metadataDir = 'Metadata';
-calibDir = 'Calibration/_xml';
+calibDir = 'Calibration/xml';
 tempRHDir = 'TempRH';
 trackingDir = 'postprocessing';
 videosDir = 'Videos';
-videoScoringDir = 'postprocessing';
+hotwirDir = 'Hotwire';
+% videoScoringDir = 'postprocessing';
 
 
 file2d = 'data2d_distorted.csv';
@@ -44,9 +49,9 @@ filecalib = 'calibration.xml';
 
 %% Creating treatments array
 % % Read treatment data from xlsx file
-treatmentSchedule = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','light','Range','C2:R11');
-startTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','light','Range','A4:A11');
-endTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','light','Range','B4:B11');
+treatmentSchedule = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','steady wind','Range','D4:N12');
+startTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','steady wind','Range','A5:A12');
+endTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','steady wind','Range','B5:B12');
 
 % % Read manually clicked 2-D disc centers 
 discCenters_2d.Hive = readcell(fullfile(rootDir, trackingDir, 'Disc_centers.xlsx'),'FileType','spreadsheet','Sheet','light','Range','A2:I20');
