@@ -170,7 +170,8 @@ pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 
-factors = [0.25:0.25:2.5];
+% factors = [0.5:0.5:2.5];
+factors = [1]; % chosen factor
 
 data_all = struct.empty;
 
@@ -192,7 +193,7 @@ parpool
 pause(10)
 parfevalOnAll(gcp(), @warning, 0, 'off', 'Ident:estimation:transientDataCorrection')
 % parfevalOnAll(gcp(), @warning, 0, 'off', 'Ident:idmodel:size4isNotNX')
-tic
+% tic
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
@@ -291,13 +292,21 @@ for ct_pattern = 1:length(pattern)
            
             
         end
+        
+%         outputFile = ['/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_' pattern{ct_pattern} ...
+%                   '_' light{ct_light} '.mat'];
+%         save(outputFile,'data4est','data4est_lowpass','data_all');      
     end
+%     keyboard;
 end
-toc
+% toc
 keyboard
 
-outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation.mat';
-save(outputFile,'data4est','data4est_lowpass','data_all','');
+outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_f1.mat';
+save(outputFile,'data4est','data4est_lowpass','data_all');
+
+outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1.mat';
+save(outputFile);
 keyboard;
 %%
 labels = cell(0, 1); % for x-axis of boxplots
