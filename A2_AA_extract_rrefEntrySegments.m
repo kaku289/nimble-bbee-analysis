@@ -353,6 +353,319 @@ for ct=1%:length(data4est_unmerged)
     end
 end
 
+%% Loading data and save plots for a specified factor
+% Plots are plotted for each track and highlights rref segment(s), entry
+% segment(s), filtered data, and data estimated from system identification
+clc; clear; close all;
+if isunix
+    dataFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1.mat';
+    DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation';
+elseif ispc
+    dataFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1.mat';
+    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation';
+end
+% load(dataFile);
+
+delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = false;
+savePDFs = false;
+
+pattern = {'checkerboard', 'spokes'};
+light = {'low', 'medium', 'high'};
+chosen_fac = 1;
+% behaviour = {'rising','constant','sleeping'};
+
+assert(length(pattern)==size(data_all,1) && length(light)==size(data_all,2));
+for ct_pattern=1:length(pattern)
+    for ct_light=1:length(light)
+        % Delete previous plots
+        if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]), 'dir')
+            rmdir(fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]),'s');
+        end
+        
+        % Create sub-directory for each treatment if it doesn't exist
+        if savePlots && ~exist(fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]), 'dir')
+            mkdir(fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]));
+        end
+        DirPlots_treatment = fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]);
+        
+        for ct1=1:length(data_all(ct_pattern,ct_light).tracks_fac)
+            % create tf vector in order of rrefEntrySegments
+            tfs = data4est_lowpass{ct_pattern,ct_light}.tfest(:,:,data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1, 2);
+            sysiddata = data4est_lowpass{ct_pattern,ct_light}.iddata(data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1);
+            
+            % plot data
+            plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withActualFilteredEstimatedData(chosen_fac, sysiddata, tfs);
+%             data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withSimulatedData(chosen_fac, tfs);
+            
+            if ~isempty(plotHandles)
+                
+                % Resizing the figures
+                for i=1:length(plotHandles)
+                    plotHandles(i).Position(3) = 680;
+                    plotHandles(i).Position(4) = 545;
+                    
+                    if i==1
+                        figureName = ['fac_' num2str(chosen_fac,'%0.2f') ...
+                            '_track' ...
+                            num2str(ct1) ...
+                            '.png'];
+                    end
+                    
+                    saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
+                    
+                    if savePDFs
+                        print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
+                            '.png','.pdf'), '-dpdf');
+                    end
+                end
+                
+                close(plotHandles);
+            end
+        end
+    end
+end
+
+%% Create fit percent boxplots and free parameters boxplots
+% % Fit percent boxplots
+% For each model order (treatments are pooled together for each model
+% order)
+for ct_fac=1:length(factors)
+    
+%     AICc = cell(size(nPZ,1),1);
+    fitPercent = cell(size(nPZ,1),1);
+    for ct_order = 1:size(nPZ,1)
+        labels{ct_order, 1} = [num2str(ct_order)];
+        
+        for ct_pattern = 1:length(pattern)
+            for ct_light = 1:length(light)
+                
+                n = length(data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes);
+%                 AICc{ct_order, 1} = [AICc{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AICc,1:n)];
+                fitPercent{ct_order, 1} = [fitPercent{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.FitPercent,1:n)];
+            end
+        end
+
+    end
+%     createBoxPlot(AICc, labels, 'AICc')
+    createBoxPlot(fitPercent, labels, 'FitPercent')
+    title(['Factor = ' num2str(factors(ct_fac))], 'FontSize', 18);
+end
+%%
+% For each treatment with a selected model order (=2)
+model_order_indx = 2;
+labels = cell(0, 1); % for x-axis of boxplots
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
+fitPercent = cell(0, 1);
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        labels{ct_pattern, ct_light} = [light_label{data_all(ct_pattern,ct_light).ct_light} '' pattern_label{data_all(ct_pattern,ct_light).ct_pattern}];
+        
+        n = length(data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes);
+        %                 AICc{ct_order, 1} = [AICc{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AICc,1:n)];
+        fitPercent{ct_pattern, ct_light} = arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light}.tfest(:,:,x,model_order_indx).Report.Fit.FitPercent,1:n);
+    end
+end
+createBoxPlot({fitPercent{:}}', {labels{:}}', 'FitPercent'); ylim([85 100])
+
+% Free Parameters box plots (for selected model order and selected factor)
+labels = cell(0, 1); % for x-axis of boxplots
+
+fitParameters = cell(0, 1);
+P1 = cell(0, 1);
+P2 = cell(0, 1);
+P3 = cell(0, 1);
+
+gain = cell(0,1); % gain
+zeta = cell(0,1); % damping ratio
+omega = cell(0,1); % natural frequency
+
+ystart_entry = cell(0,1); % starting y at rref entry
+ystart_rref = cell(0,1); % starting y at rref entry
+
+
+clear dummy;
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        
+        %Compute y_start for each rref entry segment
+        ystart_indx = arrayfun(@(x) x.rrefEntrySegments([x.rrefEntrySegments.factor]==1).intervals(:,1) , data_all(ct_pattern,ct_light).tracks_fac,'UniformOutput',false);
+        ystart_indx = vertcat(ystart_indx{:});
+        ystart_entry{ct_pattern, ct_light} = arrayfun(@(x) -data_all(ct_pattern,ct_light).tracks_fac(data4est_lowpass{ct_pattern, ct_light}.track_indexes(x)).filteredState(ystart_indx(x),3) ,1:length(ystart_indx));
+        % 
+        
+        labels{ct_pattern, ct_light} = [light_label{data_all(ct_pattern,ct_light).ct_light} '' pattern_label{data_all(ct_pattern,ct_light).ct_pattern}];
+        n = length(data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes);
+        
+        dummy = arrayfun(@(x)  data4est_lowpass{ct_pattern, ct_light}.tfest(:,:,x,model_order_indx).Report.Parameters.ParVector, 1:n, 'UniformOutput', false);
+        fitParameters{ct_pattern, ct_light} = horzcat(dummy{:})';
+        assert(all(fitParameters{ct_pattern, ct_light}(:,4) == 0));
+        
+        P1{ct_pattern, ct_light} = fitParameters{ct_pattern, ct_light}(:,1);
+        P2{ct_pattern, ct_light} = fitParameters{ct_pattern, ct_light}(:,2);
+        P3{ct_pattern, ct_light} = fitParameters{ct_pattern, ct_light}(:,3);
+        
+        gain{ct_pattern, ct_light} = P1{ct_pattern, ct_light}./P3{ct_pattern, ct_light};
+        omega{ct_pattern, ct_light} = (P3{ct_pattern, ct_light}).^0.5;
+        zeta{ct_pattern, ct_light} = P2{ct_pattern, ct_light}./P3{ct_pattern, ct_light}/2;
+    end
+end
+
+fitParameter1_figHandle = createBoxPlot({P1{:}}', {labels{:}}', 'P1'); ylim([-Inf 1000])
+fitParameter2_figHandle = createBoxPlot({P2{:}}', {labels{:}}', 'P2'); ylim([-Inf 60])
+fitParameter3_figHandle = createBoxPlot({P3{:}}', {labels{:}}', 'P3'); ylim([-Inf 1000])
+
+%%
+gain_figHandle = createBoxPlot({gain{:}}', {labels{:}}', 'Gain'); ylim([0 2])
+omega_figHandle = createBoxPlot({omega{:}}', {labels{:}}', 'Natural frequency'); ylim([-Inf 40])
+zeta_figHandle = createBoxPlot({zeta{:}}', {labels{:}}', 'Damping'); ylim([-Inf 0.1])
+%%
+figure;
+plot(horzcat(ystart_entry{:}),vertcat(gain{:}),'.'); ylim([0 2]);
+figure;
+plot([ystart_entry{:}],vertcat(omega{:}),'.'); ylim([-Inf 60]);
+figure;
+plot([ystart_entry{:}],vertcat(zeta{:}),'.'); ylim([-Inf 0.2]);
+
+%% Create contour plot of accleration on 
+% 1) r/r* and y plane (distance to start of rref interval)
+% 2) r/r* and time plane (time to start of rref interval)
+
+yentryend = cell(0,1); % starting y at rref entry
+tentryend = cell(0,1); % starting y at rref entry
+rref = cell(0,1);
+
+state_entry = cell(0,1); %[time to rrefstart, distance to rref start, r/rref, ay]
+ay_range = [];
+
+clear dummy;
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        
+        %Compute y_start for each rref segment
+        yentryend_indx = arrayfun(@(x) x.rrefEntrySegments([x.rrefEntrySegments.factor]==1).intervals(:,2) , data_all(ct_pattern,ct_light).tracks_fac,'UniformOutput',false);
+        yentryend_indx = vertcat(yentryend_indx{:});
+        
+        yentrystart_indx = arrayfun(@(x) x.rrefEntrySegments([x.rrefEntrySegments.factor]==1).intervals(:,1) , data_all(ct_pattern,ct_light).tracks_fac,'UniformOutput',false);
+        yentrystart_indx = vertcat(yentrystart_indx{:});
+        
+        dummy = arrayfun(@(x) x.rrefEntrySegments([x.rrefEntrySegments.factor]==1).rref , data_all(ct_pattern,ct_light).tracks_fac,'UniformOutput',false);
+        rref{ct_pattern, ct_light} = vertcat(dummy{:});
+        
+        yentryend{ct_pattern, ct_light} = arrayfun(@(x) -data_all(ct_pattern,ct_light).tracks_fac(data4est_lowpass{ct_pattern, ct_light}.track_indexes(x)).filteredState(yentryend_indx(x),3) ,1:length(yentryend_indx));
+        tentryend{ct_pattern, ct_light} = arrayfun(@(x) data_all(ct_pattern,ct_light).tracks_fac(data4est_lowpass{ct_pattern, ct_light}.track_indexes(x)).filteredState(yentryend_indx(x),1) ,1:length(yentryend_indx));
+        
+        dummy = arrayfun(@(x) data_all(ct_pattern,ct_light).tracks_fac(data4est_lowpass{ct_pattern, ct_light}.track_indexes(x)).filteredState(yentrystart_indx(x):yentryend_indx(x),:) ,1:length(yentryend_indx),'UniformOutput',false);
+        
+        state_entry{ct_pattern, ct_light} = arrayfun(@(x) [dummy{x}(:,1)-tentryend{ct_pattern,ct_light}(x)  -dummy{x}(:,3)-yentryend{ct_pattern,ct_light}(x)  dummy{x}(:,6)./dummy{x}(:,3)./rref{ct_pattern,ct_light}(x) dummy{x}(:,9)],1:length(dummy),'UniformOutput',false);
+        dummy = vertcat(state_entry{ct_pattern,ct_light}{:});
+        ay_range{ct_pattern, ct_light} = [min(dummy(:,4)) max(dummy(:,4))];
+        % 
+        
+        labels{ct_pattern, ct_light} = [light_label{data_all(ct_pattern,ct_light).ct_light} '' pattern_label{data_all(ct_pattern,ct_light).ct_pattern}];
+    end
+end
+
+% % per treatment plots
+% for ct_pattern = 1%:length(pattern)
+%     for ct_light = 1%:length(light)
+%         figHandles(ct_pattern,ct_light) = figure; hold on;
+%         state = state_entry{ct_pattern,ct_light};
+%         for ct=1:length(state)
+%             plot(state{ct}(:,2), state{ct}(:,3))
+%         end
+%     end
+% end
+
+% combined plot
+ayrange = vertcat(ay_range{:});
+ayrange = [min(ayrange(:,1)) max(ayrange(:,2))];
+ayrange = [floor(ayrange(1)*10)/10 ceil(max(ayrange(2))*10)/10];
+ayrange = [-5 5];
+
+% Choose colormap and find data edges for ay in ayrange
+cmap = jet(round(diff(ayrange)/1));
+edges = round(linspace(ayrange(1),ayrange(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+close all;
+figure; hold on;
+colormap(cmap);
+
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        
+        state = state_entry{ct_pattern,ct_light};
+        for ct=1:length(state)
+            [data_cmap, ~] = discretize(state{ct}(:,4), edges);
+            data_cmap(state{ct}(:,4)<=ayrange(1)) = 1;
+            data_cmap(state{ct}(:,4)>=ayrange(2)) = size(cmap,1);
+            scatter(state{ct}(:,2), state{ct}(:,3), 3, cmap(data_cmap',:),'filled','o');
+            
+%             plot(state{ct}(:,2), state{ct}(:,3),'b')
+        end
+    end
+end
+cmap_bar = colorbar('eastoutside');
+caxis(edges([1 end]));
+cmap_bar.Ticks = [edges(1) 0 edges(end)];
+cmap_bar.Label.String = 'a (ms-2)';
+cmap_bar.Label.FontSize = 16;
+ylabel('r/r*', 'FontSize', 14);
+xlabel('Distance to start of rref (m)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+
+%% Write files for statistical analysis in R
+% Create dataset for delta t, mean V and mean ay in 30-90% change in r
+clc;
+writeFile = true;
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/rTransientsData_ACC_Rstudio.txt';
+elseif ispc
+    r_file = 'D:/Disk_08_backup/light_intensity_experiments/postprocessing/rTransientsData_ACC_Rstudio.txt';
+end
+data_write = [];
+
+nBins = length(rBinValues)-1;
+
+for ct_fac=1:length(factors)
+    factor = factors(ct_fac);
+    approach_number = 0;
+    
+    for ct_pattern = 1:length(pattern)
+        for ct_light = 1:length(light)
+            
+            rBins = repmat(1:nBins, size(approachACC{ct_pattern, ct_light, ct_fac},1), 1);
+            N = numel(rBins);
+            % collecting column-wise i.e., for each rbin
+            data_write = [data_write; ... 
+                          rBins(:) ct_pattern*ones(N,1) ct_light*ones(N,1) ...
+                          risetimesACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          distanceACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          velocityACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanVelocityACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanAccACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanRdotACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          rrefACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          approach_number+approachACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          landingSideACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          timeACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          dayACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          factor*ones(N,1)];
+                      
+           approach_number = approach_number + max(approachACC{ct_pattern, ct_light, ct_fac}(:));
+        end
+    end
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'rbins', 'pattern', 'light', 'delta_t', 'delta_y', 'delta_V', 'mean_V', 'mean_a', 'mean_rdot', 'rref', ...
+                         'approach','landingSide','time','day','factor'});
+    writetable(T,r_file);
+end
+
 
 %% Loading data and collecting segments with entry dynamics
 clc; close all;
@@ -1236,7 +1549,10 @@ clc; close all;
 % clear;
 % 
 % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
 % load(inputFile);
+
+
 treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
 
@@ -1248,7 +1564,7 @@ factors = [0.25:0.25:2.5];
 
 data_all = struct.empty;
 
-rPercentIntervalsACC = 10:20:90; % in percent of r*
+rPercentIntervalsACC = 50:40:90; % in percent of r*
 rPercentIntervalsDEC = 190:-10:110; % in percent of r*
 
 rIntervals = 0.5:0.5:10; % in terms of r
@@ -1332,7 +1648,7 @@ for ct_pattern = 1:length(pattern)
                 distanceACC{ct_pattern, ct_light, ct_fac} = [];
                 velocityACC{ct_pattern, ct_light, ct_fac} = [];
                 accACC{ct_pattern, ct_light, ct_fac} = [];
-                meanVelocityACC {ct_pattern, ct_light, ct_fac} = [];
+                meanVelocityACC{ct_pattern, ct_light, ct_fac} = [];
                 meanAccACC{ct_pattern, ct_light, ct_fac} = [];
                 meanRdotACC{ct_pattern, ct_light, ct_fac} = [];
                 rrefACC{ct_pattern, ct_light, ct_fac} = [];
@@ -1435,12 +1751,13 @@ end
 % required columns =
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
+% r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
+r_file = 'D:/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
 data_write = [];
 
 nBins = length(rBinValues)-1;
 
-for ct_fac=4%1:length(factors)
+for ct_fac=1:length(factors)
     factor = factors(ct_fac);
     approach_number = 0;
     
@@ -1489,13 +1806,13 @@ nx = size(risetimesACC{1,1,1},2);
 ny = 3;
 cmap = [120 120 120; 67,162,202; 245 130 46]./255;
 
-for ct_fac=6%1:length(factors) % Create plot for each factor
+for ct_fac=4%1:length(factors) % Create plot for each factor
     
     figure;
     subplot(2,1,1);
     ndata = max([size(risetimesACC{1,1,ct_fac},1) size(risetimesACC{1,2,ct_fac},1) size(risetimesACC{1,3,ct_fac},1)]);
-%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],risetimesACC(1,1:3,ct_fac),'un',0);
-    y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],meanVelocityACC(1,1:3,ct_fac),'un',0);
+    y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],risetimesACC(1,1:3,ct_fac),'un',0);
+%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],meanVelocityACC(1,1:3,ct_fac),'un',0);
 %     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],distanceACC(1,1:3,ct_fac),'un',0);
     y = cat(3,y{:}); % Concatenating along third dimension
     
@@ -1519,8 +1836,8 @@ for ct_fac=6%1:length(factors) % Create plot for each factor
     h1.GroupLabels = {{'L', 'M', 'H'}};
     h1.showLegend = true;
     title('checkerboard');
-%     ylabel('delta t');
-    ylabel('mean V');
+    ylabel('delta t');
+%     ylabel('mean V');
 
 %     set(gca, 'FontSize', 18);
 %     h1.x = ;
@@ -1528,8 +1845,8 @@ for ct_fac=6%1:length(factors) % Create plot for each factor
 
     subplot(2,1,2);
     ndata = max([size(risetimesACC{2,1,ct_fac},1) size(risetimesACC{2,2,ct_fac},1) size(risetimesACC{2,3,ct_fac},1)]);
-%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],risetimesACC(2,1:3,ct_fac),'un',0);
-    y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],meanVelocityACC(2,1:3,ct_fac),'un',0);
+    y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],risetimesACC(2,1:3,ct_fac),'un',0);
+%     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],meanVelocityACC(2,1:3,ct_fac),'un',0);
 %     y=cellfun(@(x) [x;nan(ndata-size(x,1),nx)],distanceACC(2,1:3,ct_fac),'un',0);
     y = cat(3,y{:}); % Concatenating along third dimension
     
@@ -1539,8 +1856,8 @@ for ct_fac=6%1:length(factors) % Create plot for each factor
     h1.meanColor{1} = cmap(1,:); h1.meanColor{2} = cmap(2,:); h1.meanColor{3} = cmap(3,:); 
     h1.medianColor{1} = cmap(1,:); h1.medianColor{2} = cmap(2,:); h1.medianColor{3} = cmap(3,:); 
     h1.symbolColor{1} = cmap(1,:); h1.symbolColor{2} = cmap(2,:); h1.symbolColor{3} = cmap(3,:); 
-%     ylabel('delta t');
-    ylabel('mean V');
+    ylabel('delta t');
+%     ylabel('mean V');
 %     set(gca, 'FontSize', 18);
     title('spoke');
 end
@@ -1748,14 +2065,14 @@ function figHandle = createBoxPlot(variable, labels, yxislabel)
     figure(figHandle);
     boxplot2(variable, 'Labels', labels, 'OutlierSize', 0.00001);
 %     hbox = gca;
-    set(gca, 'FontSize', 18); grid on;
+    set(gca, 'FontSize', 18); %grid on;
 %     xlabel('Treatments', 'FontSize', 18);
     ylabel(yxislabel, 'FontSize', 18);
     % ylim([0 1.5]);
     for ct = 1:length(variable)
             x=(ct+(rand(length(variable{ct, 1}),1)-0.5)/4);
 
-            f = scatter(x(:,1),variable{ct, 1},40,'k','filled'); 
+            f = scatter(x(:,1),variable{ct, 1},10,'k','filled'); 
             f.MarkerFaceAlpha = 0.5;
     %         keyboard;
     end
