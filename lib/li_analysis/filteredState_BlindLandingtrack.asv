@@ -33,36 +33,11 @@ classdef filteredState_BlindLandingtrack < handle
             thisDisc = landingDiscs(arrayfun(@(x) strcmpi(x.side, obj.landingSide), landingDiscs));
             
             center = (oppositeDisc.center - thisDisc.center)';
-            height_cylinder = 0.06;
-            if filteredState_BlindLandingtrack.IsInsideCylinder(center - [0 height_cylinder/2 0], center + [0 height_cylinder/2 0], oppositeDisc.radius, state0(:,2:4))
+            height_cylinder = 0.04;
+            if filteredState_BlindLandingtrack.IsInsideCylinder(thisDisc.center', p2, oppositeDisc.radius, state0(:,2:4))
                 is = true;
             else
                 is = false;
-            end
-        end
-        
-        function has = hasTakeoff(obj, landingDiscs)
-            % Determines if the landing track has a non-takeoff start
-            
-            % landingDiscs - 1x2 LandingDisc array
-            
-            
-            [~, ymin_indx] = min(obj.filteredState(:,3));
-            state0 = obj.filteredState(ymin_indx,:);
-            
-            oppositeDisc = landingDiscs(arrayfun(@(x) ~strcmpi(x.side, obj.landingSide), landingDiscs));
-            thisDisc = landingDiscs(arrayfun(@(x) strcmpi(x.side, obj.landingSide), landingDiscs));
-            
-            center = (oppositeDisc.center - thisDisc.center)';
-            if strcmpi(thisDisc.side,'feeder')
-                center(2) = -center(:, 2);
-            end
-            height_cylinder = 0.05;
-            if any(filteredState_BlindLandingtrack.IsInsideCylinder(center - [0 height_cylinder/2 0], center + [0 height_cylinder/2 0], oppositeDisc.radius, obj.filteredState(:,2:4))) || ...
-                    any(obj.filteredState(:,4) < -0.18)
-                has = true;
-            else
-                has = false;
             end
         end
         

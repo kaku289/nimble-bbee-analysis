@@ -160,10 +160,13 @@ keyboard;
 %% Extract rref data for statistical analysis
 clc; close all;
 % clear;
-
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+if isunix
+    inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
-load(inputFile);
+elseif ispc
+    inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+end
+% load(inputFile);
 treatments = treatments(1:14*8); % Taking experiments for first 14 days
 % combination
 
@@ -172,6 +175,7 @@ light = {'low', 'medium', 'high', 'lower'};
 behaviour = {'rising','constant','sleeping'};
 
 data = data4rrefEstimate.empty;
+hasTakeoff = []; % whether or not the landing track has takeoff dynamics in it as defined in filteredState_BlindLandingtrack.hasTakeoff(..) method
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
@@ -199,11 +203,13 @@ for ct_pattern = 1:length(pattern)
                 treatment = relevantTreatments(ct_treatment);
                 
                 arrayfun(@(x) x.setLandingSide(),[treatment.landingTracks.state_LDF]'); % to store landing side in the rrefSegments
-%                 arrayfun(@(x) x.compute_params_basedon_3dspeed(), [treatment.landingTracks.state_LDF]');
+                arrayfun(@(x) x.compute_params_basedon_3dspeed(), [treatment.landingTracks.state_LDF]');
                 
                 data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
                 data1 = horzcat(data1{:});
                 
+                hastakeoff_pertreatment = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs)*ones(1,length(x.rrefSegments)),[treatment.landingTracks.state_LDF]','UniformOutput',false);
+                hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
                 % Discard empty intervals
                 indices = arrayfun(@(x) ~isempty(x.intervals_ti), data1);
                 
@@ -215,6 +221,7 @@ for ct_pattern = 1:length(pattern)
                 [data1.time] = deal(treatment.startTime);
     
                 data = [data data1];
+                hasTakeoff = [hasTakeoff hastakeoff_pertreatment(indices)];
 %                 size(data)
 %                 keyboard;
             end
@@ -226,14 +233,19 @@ end
 % This file contains data for all the factors
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio.txt';
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio_3dspeed.txt';
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio.txt';
+% r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio_3dspeed.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_all_rref_Rstudio.txt';
+end
 factors = [0.25:0.25:2.5];
 data_write = [];
 for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
     N = length(data_fac);
     
     % Create nominal and ordinal variables
@@ -244,6 +256,8 @@ for ct_factor=1:length(factors)
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
+    hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+
     % create other variables
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
@@ -257,7 +271,7 @@ for ct_factor=1:length(factors)
         
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d vertcat(hasTakeoff_fac{:})];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -266,7 +280,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold', 'speed3d'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold', 'speed3d', 'hasTakeoff'});
     writetable(T,r_file);
 end
 
