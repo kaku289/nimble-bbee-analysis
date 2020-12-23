@@ -35,121 +35,117 @@ addpath('./lib/boxplot2-pkg/minmax');
 
 % Inputs
 close all; clc;
-clear;
+% clear;
 
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
-load(inputFile);
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref.mat';
+outputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref_rrefEntry.mat';
+% load(inputFile);
 
-DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry';
+DirPlots = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/BlindLandingTracks/rref_entry';
 % DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate_3dspeed';
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
 savePlots = false;
 savePDFs = false;
 
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
-factors = [1];
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
-        for ct_behaviour = 2%1:length(behaviour)
-            
-            % Delete previous plots
-            if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]), 'dir')
-                rmdir(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]),'s');
-            end
+% factors = [1];
+for ct_wind = 1:length(winds)
+    for ct_behaviour = 2%1:length(behaviour)
         
-            % Create sub-directory for each treatment if it doesn't exist
-            if savePlots && ~exist(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]), 'dir')
-                mkdir(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]));
-            end
-            DirPlots_treatment = fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]);
-        
-           % Selecting relevant treatments
-            if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
-            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
-            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
-            else
-                error('What other treatments did you perform dude?')
-            end
-            
-            
-            for ct_treatment=1:length(relevantTreatments)
-                treatment = relevantTreatments(ct_treatment);
-                
-                videoTimes = [[treatment.videosInfo.startTime]' [treatment.videosInfo.endTime]'];
-                if ~isempty(treatment.landingTracks)
-                    disp(['Into, day: ' num2str(treatment.datenum) ...
-                          ', pattern: ' treatment.pattern ...
-                          ', light: ' treatment.light ...
-                          ', behaviour: ' behaviour{ct_behaviour}]);
-                    
-                      for ct_track=1:length(treatment.landingTracks) % for each landing track
-                          track = treatment.landingTracks(ct_track);
-                          for ct_excerpt=1:length(track.state_LDF) % for each track excerpt
-                              excerpt = track.state_LDF(ct_excerpt);
-                              
-                              excerpt.find_rrefEntry();
-                              
-                              if savePlots
-                                  for ct_factor=1:length(factors)
-
-                                      plotHandles = excerpt.plot_rrefsEntry(factors(ct_factor));
-%                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
-
-                                      if ~isempty(plotHandles)
-
-                                          % Resizing the figures
-                                          for i=1:length(plotHandles)
-                                              plotHandles(i).Position(3) = 680;
-                                              plotHandles(i).Position(4) = 545;
-
-                                              if i==1
-                                                  figureName = ['fac_' num2str(factors(ct_factor),'%0.2f') '_' ...
-                                                              num2str(treatment.datenum) '_' ...
-                                                              num2str(treatment.startTime) '_' num2str(treatment.endTime) ...
-                                                              '_obj' num2str(track.obj_id) '_track' ...
-                                                              num2str(ct_track) '_excerpt' num2str(ct_excerpt) ...
-                                                              '.png'];
-                                              end
-
-                                              saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
-                                              
-                                              if savePDFs
-                                                  print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
-                                                      '.png','.pdf'), '-dpdf');
-                                              end
-                                          end
-
-                                          close(plotHandles);
-
-                                      end
-                                  end
-                              end
-                                  
-                          end % for excerpt
-                      end % for track
-                end
-            end % for treatment
-            
+        % Delete previous plots
+        if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]), 'dir')
+            rmdir(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]),'s');
         end
+        
+        % Create sub-directory for each treatment if it doesn't exist
+        if savePlots && ~exist(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]), 'dir')
+            mkdir(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]));
+        end
+        DirPlots_treatment = fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]);
+        
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+        
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+        
+        
+        for ct_treatment=1:length(relevantTreatments)
+            treatment = relevantTreatments(ct_treatment);
+            
+%             videoTimes = [[treatment.videosInfo.startTime]' [treatment.videosInfo.endTime]'];
+            if ~isempty(treatment.landingTracks)
+                disp(['Into, day: ' num2str(treatment.datenum) ...
+                    ', wind: ' num2str(treatment.wind) ...
+                    ', pattern: ' treatment.pattern ...
+                    ', light: ' treatment.light ...
+                    ', behaviour: ' behaviour{ct_behaviour}]);
+                
+                for ct_track=1:length(treatment.landingTracks) % for each landing track
+                    track = treatment.landingTracks(ct_track);
+                    for ct_excerpt=1:length(track.state_LDF) % for each track excerpt
+                        excerpt = track.state_LDF(ct_excerpt);
+                        
+                        excerpt.find_rrefEntry();
+                        
+                        if savePlots
+                            for ct_factor=1:length(factors)
+                                
+                                plotHandles = excerpt.plot_rrefsEntry(factors(ct_factor));
+                                %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
+                                
+                                if ~isempty(plotHandles)
+                                    
+                                    % Resizing the figures
+                                    for i=1:length(plotHandles)
+                                        plotHandles(i).Position(3) = 680;
+                                        plotHandles(i).Position(4) = 545;
+                                        
+                                        if i==1
+                                            figureName = ['fac_' num2str(factors(ct_factor),'%0.2f') '_' ...
+                                                num2str(treatment.datenum) '_' ...
+                                                num2str(treatment.startTime) '_' num2str(treatment.endTime) ...
+                                                '_obj' num2str(track.obj_id) '_track' ...
+                                                num2str(ct_track) '_excerpt' num2str(ct_excerpt) ...
+                                                '.png'];
+                                        end
+                                        
+                                        saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
+                                        
+                                        if savePDFs
+                                            print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
+                                                '.png','.pdf'), '-dpdf');
+                                        end
+                                    end
+                                    
+                                    close(plotHandles);
+                                    
+                                end
+                            end
+                        end
+                        
+                    end % for excerpt
+                end % for track
+            end
+        end % for treatment
+        
     end
 end
 keyboard
-save(outputFile, 'treatments');
+save(outputFile, 'treatments', '-v7.3', '-nocompression');
 keyboard;
 
 %% Run estimation of entry dynamics
@@ -1235,20 +1231,17 @@ fitParameter3_figHandle = createBoxPlot(P3_refined, labels, 'P3'); ylim([-Inf 10
 clc; close all;
 % clear;
 % 
-% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+% inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref_rrefEntry.mat';
 % load(inputFile);
-treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
-
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
 
 data_all = struct.empty;
 
-rPercentIntervalsACC = 10:20:90; % in percent of r*
+rPercentIntervalsACC = 15:15:90; % in percent of r*
 rPercentIntervalsDEC = 190:-10:110; % in percent of r*
 
 rIntervals = 0.5:0.5:10; % in terms of r
@@ -1257,7 +1250,9 @@ rIntervals = 0.5:0.5:10; % in terms of r
 risetimesACC = cell.empty;
 distanceACC = cell.empty;
 velocityACC = cell.empty;
+deltarACC = cell.empty;
 accACC = cell.empty;
+meanDistanceACC = cell.empty;
 meanVelocityACC = cell.empty;
 meanAccACC = cell.empty;
 meanRdotACC = cell.empty;
@@ -1266,11 +1261,17 @@ approachACC = cell.empty;
 landingSideACC = cell.empty;
 timeACC = cell.empty;
 dayACC = cell.empty;
+r0ACC = cell.empty; % r at rPercentIntervalsACC(1)
+rdot0ACC = cell.empty; % rdot at rPercentIntervalsACC(1)
+rdot0_filteredACC = cell.empty; % rdot at rPercentIntervalsACC(1)
+
 
 risetimesDEC = cell.empty;
 distanceDEC = cell.empty;
 velocityDEC = cell.empty;
+deltarDEC = cell.empty;
 accDEC = cell.empty;
+meanDistanceDEC = cell.empty;
 meanVelocityDEC = cell.empty;
 meanAccDEC = cell.empty;
 meanRdotDEC = cell.empty;
@@ -1281,152 +1282,179 @@ timeDEC = cell.empty;
 dayDEC = cell.empty;
 
 entryData = cell.empty;
+fc= 5; % Hz
 
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
-        for ct_behaviour = 2%1:length(behaviour)
-            disp(' ');
-            disp(['Pattern: ' pattern{ct_pattern} ...
-                  ', light: ' light{ct_light} ...
-                  ', behaviour: ' behaviour{ct_behaviour}]);
+for ct_wind = 1:length(winds)
+    for ct_behaviour = 2%1:length(behaviour)
+        disp(' ');
+        disp(['Wind: ' num2str(winds(ct_wind)) ...
+            ', behaviour: ' behaviour{ct_behaviour}]);
         
-           % Selecting relevant treatments
-            if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
-            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
-            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
-            else
-                error('What other treatments did you perform dude?')
-            end
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+        
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+        
+        %%%%%%%%%%%%%% Each wind %%%%%%%%%%%
+        landingTracks = [relevantTreatments.landingTracks];
+        state_LDF = [landingTracks.state_LDF];
+        rrefEntrySegs = [state_LDF.rrefEntrySegments];
+        
+        landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+        landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+        
+        % Finding # of "tracks" (state LDFs) that contain rref entry segments
+        % for each factor
+        for ct_fac = 1:length(factors)
+            factor = factors(ct_fac);
+            indices = arrayfun(@(x) ~isempty(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-factor)<1e-6).intervals),state_LDF);
             
-            %%%%%%%%%%%%%% Each light and pattern combination %%%%%%%%%%%
-            landingTracks = [relevantTreatments.landingTracks];
-            state_LDF = [landingTracks.state_LDF];
-            rrefEntrySegs = [state_LDF.rrefEntrySegments];
+            disp(['\t Factor: ' num2str(factor, '%0.2f') ...
+            ', # of state_LDFs with rrefEntry: ' num2str(sum(indices))]);
             
-            landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
-            landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+            data_all(ct_wind, ct_fac).tracks_fac = state_LDF(indices);
+            data_all(ct_wind, ct_fac).ct_factor = factor;
+            data_all(ct_wind, ct_fac).landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
             
-            % Finding # of "tracks" (state LDFs) that contain rref entry segments
-            % for each factor
-            for ct_fac = 1:length(factors)
-                factor = factors(ct_fac);
-                indices = arrayfun(@(x) ~isempty(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-factor)<1e-6).intervals),state_LDF);
+            risetimesACC{ct_wind, ct_fac} = [];
+            distanceACC{ct_wind, ct_fac} = [];
+            velocityACC{ct_wind, ct_fac} = [];
+            deltarACC{ct_wind, ct_fac} = [];
+            accACC{ct_wind, ct_fac} = [];
+            meanDistanceACC{ct_wind, ct_fac} = [];
+            meanVelocityACC{ct_wind, ct_fac} = [];
+            meanAccACC{ct_wind, ct_fac} = [];
+            meanRdotACC{ct_wind, ct_fac} = [];
+            rrefACC{ct_wind, ct_fac} = [];
+            approachACC{ct_wind, ct_fac} = [];
+            landingSideACC{ct_wind, ct_fac} = [];
+            timeACC{ct_wind, ct_fac} = [];
+            dayACC{ct_wind, ct_fac} = [];
+            r0ACC{ct_wind, ct_fac} = [];
+            rdot0ACC{ct_wind, ct_fac} = [];
+            rdot0_filteredACC{ct_wind, ct_fac} = [];
+            
+            risetimesDEC{ct_wind, ct_fac} = [];
+            distanceDEC{ct_wind, ct_fac} = [];
+            velocityDEC{ct_wind, ct_fac} = [];
+            deltarDEC{ct_wind, ct_fac} = [];
+            accDEC{ct_wind, ct_fac} = [];
+            meanDistanceDEC{ct_wind, ct_fac} = [];
+            meanVelocityDEC{ct_wind, ct_fac} = [];
+            meanAccDEC{ct_wind, ct_fac} = [];
+            meanRdotDEC{ct_wind, ct_fac} = [];
+            rrefDEC{ct_wind, ct_fac} = [];
+            approachDEC{ct_wind, ct_fac} = [];
+            landingSideDEC{ct_wind, ct_fac} = [];
+            timeDEC{ct_wind, ct_fac} = [];
+            dayDEC{ct_wind, ct_fac} = [];
+            
+            entryData{ct_fac} = [];
+            
+            for ct1=1:sum(indices) % for each state_LDF
+                state = data_all(ct_wind, ct_fac).tracks_fac(ct1).filteredState;
+                y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3); t = state(:,1)-state(1,1);
+                rdot = diffxy(t, r); dt = t(2)-t(1);
                 
-                data_all(ct_pattern, ct_light, ct_fac).tracks_fac = state_LDF(indices);
-                data_all(ct_pattern, ct_light, ct_fac).ct_pattern = ct_pattern;
-                data_all(ct_pattern, ct_light, ct_fac).ct_light = ct_light;
-                data_all(ct_pattern, ct_light, ct_fac).ct_factor = factor;
-                data_all(ct_pattern, ct_light, ct_fac).landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+                rrefEntrySegments_fac = data_all(ct_wind, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_wind, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
                 
-                risetimesACC{ct_pattern, ct_light, ct_fac} = [];
-                distanceACC{ct_pattern, ct_light, ct_fac} = [];
-                velocityACC{ct_pattern, ct_light, ct_fac} = [];
-                accACC{ct_pattern, ct_light, ct_fac} = [];
-                meanVelocityACC {ct_pattern, ct_light, ct_fac} = [];
-                meanAccACC{ct_pattern, ct_light, ct_fac} = [];
-                meanRdotACC{ct_pattern, ct_light, ct_fac} = [];
-                rrefACC{ct_pattern, ct_light, ct_fac} = [];
-                approachACC{ct_pattern, ct_light, ct_fac} = [];
-                landingSideACC{ct_pattern, ct_light, ct_fac} = [];
-                timeACC{ct_pattern, ct_light, ct_fac} = [];
-                dayACC{ct_pattern, ct_light, ct_fac} = [];
-
-                risetimesDEC{ct_pattern, ct_light, ct_fac} = [];
-                distanceDEC{ct_pattern, ct_light, ct_fac} = [];
-                velocityDEC{ct_pattern, ct_light, ct_fac} = [];
-                accDEC{ct_pattern, ct_light, ct_fac} = [];
-                meanVelocityDEC{ct_pattern, ct_light, ct_fac} = [];
-                meanAccDEC{ct_pattern, ct_light, ct_fac} = [];
-                meanRdotDEC{ct_pattern, ct_light, ct_fac} = [];
-                rrefDEC{ct_pattern, ct_light, ct_fac} = [];
-                approachDEC{ct_pattern, ct_light, ct_fac} = [];
-                landingSideDEC{ct_pattern, ct_light, ct_fac} = [];
-                timeDEC{ct_pattern, ct_light, ct_fac} = [];
-                dayDEC{ct_pattern, ct_light, ct_fac} = [];
-
-                entryData{ct_fac} = [];
-                
-                for ct1=1:sum(indices) % for each state_LDF
-                    state = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).filteredState;
-                    y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3); t = state(:,1)-state(1,1);
-                    rdot = diffxy(t, r);
+                for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+                    entryStart_indx = rrefEntrySegments_fac.intervals(ct2,1);
+                    entryEnd_indx = rrefEntrySegments_fac.intervals(ct2,2);
+                    steadyEnd_indx = rrefEntrySegments_fac.intervals(ct2,3);
                     
-                    rrefEntrySegments_fac = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
+                    rref = -rrefEntrySegments_fac.rmean(ct2);
                     
-                    for ct2=1:size(rrefEntrySegments_fac.intervals,1)
-                        entryStart_indx = rrefEntrySegments_fac.intervals(ct2,1);
-                        entryEnd_indx = rrefEntrySegments_fac.intervals(ct2,2);
+                    % make entryEnd_indx to be one after 90%rref or
+                    % until r is increasing
+                    if r(entryEnd_indx) < 0.9*rref
+                        %                             entryEnd_indx = entryEnd_indx + find(r(entryEnd_indx:steadyEnd_indx)>0.9*rref,1) - 1;
+                        entryEnd_indx = entryEnd_indx + find(diff(r(entryEnd_indx:steadyEnd_indx))<0,1) - 1;
+                    end
+                    
+                    y_part = y(entryStart_indx:entryEnd_indx); V_part = V(entryStart_indx:entryEnd_indx); ay_part = ay(entryStart_indx:entryEnd_indx); 
+                    rdot_part = rdot(entryStart_indx:entryEnd_indx);
+                    
+                    entryData{ct_fac} = [entryData{ct_fac}; ...
+                        t(entryStart_indx:entryEnd_indx)  y(entryStart_indx:entryEnd_indx) ...
+                        V(entryStart_indx:entryEnd_indx)  ay(entryStart_indx:entryEnd_indx) ...
+                        r(entryStart_indx:entryEnd_indx)  rdot(entryStart_indx:entryEnd_indx) ...
+                        rref*ones(entryEnd_indx-entryStart_indx+1,1)];
+                    
+                    if r(entryStart_indx) > rref % populate risetimesDEC
+                        rBinValues = rPercentIntervalsDEC*rref/100;
+                        %                             rBinValues = rIntervals;
+                        t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                        risetimesDEC{ct_wind, ct_fac}(end+1,:) = diff(t_at_rBinValues);
                         
-                        rref = -rrefEntrySegments_fac.rmean(ct2);
-                        V_part = V(entryStart_indx:entryEnd_indx); ay_part = ay(entryStart_indx:entryEnd_indx); rdot_part = rdot(entryStart_indx:entryEnd_indx);
+                        %                     if any(diff(t_at_rBinValues) < 0)
+                        %                         keyboard;
+                        %                     end
                         
-                        entryData{ct_fac} = [entryData{ct_fac}; ...
-                                              t(entryStart_indx:entryEnd_indx)  y(entryStart_indx:entryEnd_indx) ...
-                                              V(entryStart_indx:entryEnd_indx)  ay(entryStart_indx:entryEnd_indx) ...
-                                              r(entryStart_indx:entryEnd_indx)  rdot(entryStart_indx:entryEnd_indx) ...
-                                              rref*ones(entryEnd_indx-entryStart_indx+1,1)];
+                    elseif r(entryStart_indx) < rref % populate risetimesACC
+                        rBinValues = rPercentIntervalsACC*rref/100;
+                        %                             rBinValues = rIntervals;
                         
-                        if r(entryStart_indx) > rref % populate risetimesDEC
-                            rBinValues = rPercentIntervalsDEC*rref/100;
-%                             rBinValues = rIntervals;
-                            t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
-                            risetimesDEC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(t_at_rBinValues);
-                            
-                            %                     if any(diff(t_at_rBinValues) < 0)
-                            %                         keyboard;
-                            %                     end
-                            
-                        elseif r(entryStart_indx) < rref % populate risetimesACC
-                            rBinValues = rPercentIntervalsACC*rref/100;
-%                             rBinValues = rIntervals;
-                            
-                            t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
-                            y_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), y(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
-                            V_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), V(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
-                            a_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), ay(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
-                            
-                            risetimesACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(t_at_rBinValues);
-                            distanceACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(y_at_rBinValues);
-                            velocityACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(V_at_rBinValues);
-                            accACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(a_at_rBinValues);
-                            
-                            meanVelocityACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(V_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
-                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
-                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues); % + diff(t_at_rBinValues) - diff(t_at_rBinValues) is used to make values nan where diff(t_at_rBinValues) is also nan 
-                            meanAccACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(ay_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
-                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
-                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues);
-                            meanRdotACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(rdot_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
-                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
-                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues);
-                            rrefACC{ct_pattern, ct_light, ct_fac}(end+1,:) = rref*ones(1,length(rBinValues)-1);
-                            
-                            approachACC{ct_pattern, ct_light, ct_fac}(end+1,:) = ct1*ones(1,length(rBinValues)-1);
-                            if strcmpi(data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).landingSide,"Hive")
-                                landingSideACC{ct_pattern, ct_light, ct_fac}(end+1,:) = 1*ones(1,length(rBinValues)-1);
-                            elseif strcmpi(data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).landingSide,"Feeder")
-                                landingSideACC{ct_pattern, ct_light, ct_fac}(end+1,:) = 2*ones(1,length(rBinValues)-1);
-                            end
-                            timeACC{ct_pattern, ct_light, ct_fac}(end+1,:) = str2double(data_all(ct_pattern, ct_light, ct_fac).landingTrack(ct1).foldername(10:13))*ones(1,length(rBinValues)-1);
-                            dayACC{ct_pattern, ct_light, ct_fac}(end+1,:) = data_all(ct_pattern, ct_light, ct_fac).landingTrack(ct1).datenum*ones(1,length(rBinValues)-1);
-                           
+                        t_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), t(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                        y_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), y(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                        V_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), V(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                        a_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), ay(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                        rdot_at_rBinValues = interp1(t(entryStart_indx:entryEnd_indx), rdot_part,  t_at_rBinValues, 'makima', nan);
+                        
+                        if any(diff(t_at_rBinValues) < 0) %isnan(diff(t_at_rBinValues))
+                            keyboard;
                         end
+                        
+                        risetimesACC{ct_wind, ct_fac}(end+1,:) = diff(t_at_rBinValues);
+                        distanceACC{ct_wind, ct_fac}(end+1,:) = diff(y_at_rBinValues);
+                        velocityACC{ct_wind, ct_fac}(end+1,:) = diff(V_at_rBinValues);
+                        deltarACC{ct_wind, ct_fac}(end+1,:) = diff(rBinValues) + diff(t_at_rBinValues) - diff(t_at_rBinValues);
+                        accACC{ct_wind, ct_fac}(end+1,:) = diff(a_at_rBinValues);
+                        
+                        meanDistanceACC{ct_wind, ct_fac}(end+1,:) = arrayfun(@(x) mean(y_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                            r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                            + diff(t_at_rBinValues) - diff(t_at_rBinValues); % + diff(t_at_rBinValues) - diff(t_at_rBinValues) is used to make values nan where diff(t_at_rBinValues) is also nan
+                        meanVelocityACC{ct_wind, ct_fac}(end+1,:) = arrayfun(@(x) mean(V_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                            r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                            + diff(t_at_rBinValues) - diff(t_at_rBinValues); % + diff(t_at_rBinValues) - diff(t_at_rBinValues) is used to make values nan where diff(t_at_rBinValues) is also nan
+                        meanAccACC{ct_wind, ct_fac}(end+1,:) = arrayfun(@(x) mean(ay_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                            r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                            + diff(t_at_rBinValues) - diff(t_at_rBinValues);
+                        meanRdotACC{ct_wind, ct_fac}(end+1,:) = arrayfun(@(x) mean(rdot_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                            r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                            + diff(t_at_rBinValues) - diff(t_at_rBinValues);
+                        rrefACC{ct_wind, ct_fac}(end+1,:) = rref*ones(1,length(rBinValues)-1);
+                        
+                        % at the beginning of each bin segment
+                        r0ACC{ct_wind, ct_fac}(end+1,:) = rBinValues(1:end-1);
+                        rdot0ACC{ct_wind, ct_fac}(end+1,:) = rdot_at_rBinValues(1:end-1);
+                        
+                        approachACC{ct_wind, ct_fac}(end+1,:) = ct1*ones(1,length(rBinValues)-1);
+                        if strcmpi(data_all(ct_wind, ct_fac).tracks_fac(ct1).landingSide,"Hive")
+                            landingSideACC{ct_wind, ct_fac}(end+1,:) = 1*ones(1,length(rBinValues)-1);
+                        elseif strcmpi(data_all(ct_wind, ct_fac).tracks_fac(ct1).landingSide,"Feeder")
+                            landingSideACC{ct_wind, ct_fac}(end+1,:) = 2*ones(1,length(rBinValues)-1);
+                        end
+                        timeACC{ct_wind, ct_fac}(end+1,:) = str2double(data_all(ct_wind, ct_fac).landingTrack(ct1).foldername(10:13))*ones(1,length(rBinValues)-1);
+                        dayACC{ct_wind, ct_fac}(end+1,:) = data_all(ct_wind, ct_fac).landingTrack(ct1).datenum*ones(1,length(rBinValues)-1);
                         
                     end
                     
                 end
-
+                
             end
+            
         end
     end
 end
@@ -1435,44 +1463,53 @@ end
 % required columns =
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
+removeNAN = true;
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
 data_write = [];
 
 nBins = length(rBinValues)-1;
 
-for ct_fac=4%1:length(factors)
+for ct_fac=1:length(factors)
     factor = factors(ct_fac);
     approach_number = 0;
     
-    for ct_pattern = 1:length(pattern)
-        for ct_light = 1:length(light)
-            
-            rBins = repmat(1:nBins, size(approachACC{ct_pattern, ct_light, ct_fac},1), 1);
-            N = numel(rBins);
-            % collecting column-wise i.e., for each rbin
-            data_write = [data_write; ... 
-                          rBins(:) ct_pattern*ones(N,1) ct_light*ones(N,1) ...
-                          risetimesACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          distanceACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          velocityACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          meanVelocityACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          meanAccACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          meanRdotACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          rrefACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          approach_number+approachACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          landingSideACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          timeACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          dayACC{ct_pattern, ct_light, ct_fac}(:) ...
-                          factor*ones(N,1)];
-                      
-           approach_number = approach_number + max(approachACC{ct_pattern, ct_light, ct_fac}(:));
-        end
+    for ct_wind = 1:length(winds)
+        
+        rBins = repmat(1:nBins, size(approachACC{ct_wind, ct_fac},1), 1);
+        N = numel(rBins);
+        % collecting column-wise i.e., for each rbin
+        data_write = [data_write; ...
+                    rBins(:) ct_wind*ones(N,1) ...
+                    risetimesACC{ct_wind, ct_fac}(:) ...
+                    distanceACC{ct_wind, ct_fac}(:) ...
+                    velocityACC{ct_wind, ct_fac}(:) ...
+                    deltarACC{ct_wind, ct_fac}(:) ...
+                    meanDistanceACC{ct_wind, ct_fac}(:) ...
+                    meanVelocityACC{ct_wind, ct_fac}(:) ...
+                    meanAccACC{ct_wind, ct_fac}(:) ...
+                    meanRdotACC{ct_wind, ct_fac}(:) ...
+                    rrefACC{ct_wind, ct_fac}(:) ...
+                    r0ACC{ct_wind, ct_fac}(:) ...
+                    rdot0ACC{ct_wind, ct_fac}(:) ...
+                    approach_number+approachACC{ct_wind, ct_fac}(:) ...
+                    landingSideACC{ct_wind, ct_fac}(:) ...
+                    timeACC{ct_wind, ct_fac}(:) ...
+                    dayACC{ct_wind, ct_fac}(:) ...
+                    factor*ones(N,1)];
+        
+        approach_number = approach_number + max(approachACC{ct_wind, ct_fac}(:));
+        
     end
+end
+
+if removeNAN
+    sum(data_write(:,13)<0)
+    data_write(isnan(data_write(:,3)) | data_write(:,13)<0,:) = [];
 end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'rbins', 'pattern', 'light', 'delta_t', 'delta_y', 'delta_V', 'mean_V', 'mean_a', 'mean_rdot', 'rref', ...
+        'VariableNames',{'rbins', 'wind', 'delta_t', 'delta_y', 'delta_V', 'delta_r', 'mean_y', 'mean_V', 'mean_a', 'mean_rdot', 'rref', 'r0', 'rdot0', ...
                          'approach','landingSide','time','day','factor'});
     writetable(T,r_file);
 end

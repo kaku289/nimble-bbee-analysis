@@ -1,43 +1,67 @@
-%% Plotting trajectories and mean approach for 10005 tracks
+%% Plotting trajectories and mean approach for ALL tracks
 %
 
-% Extract all 10005 approaches
-close all;
-clc; clear;
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-load(inputFile);
-treatments = treatments(1:14*8);
+% Extract all approaches
+close all; clc;
+% clear;
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
+% load(inputFile);
 
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+
+% to open/modify the Matlab text editor sessions
+addpath('./lib/EditorSessionManager');
+
+% to generate colormaps
+addpath('./lib/DrosteEffect-BrewerMap-221b913');
+
+% to add definition of classes being used for this analysis
+addpath('./lib/li_analysis');
+
+% to include class definitions used in videoscorer_data
+addpath('./lib/video_scorer/');
+% rmpath('./lib/video_scorer/Source');
+
+% to include higher order accurate differentiation function
+addpath('./lib/diffxy');
+
+% to include fmf reader
+addpath('./lib/flymovieformat');
+
+% to include hline and vline function
+addpath('./lib/hline_vline');
+
+%%
+
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 data_all = struct.empty;
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
+
+for ct_wind = 1:length(winds)
         for ct_behaviour = 2%1:length(behaviour)
             clear dummy;
-
-            disp(['Pattern: ' pattern{ct_pattern} ...
-                  ', light: ' light{ct_light} ...
+            
+            disp(['Wind: ' num2str(winds(ct_wind)) ...
                   ', behaviour: ' behaviour{ct_behaviour}]);
               
             % Selecting relevant treatments
             if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
+                relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
             elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
                                      rem(1:length(treatments), 8)>1 & ...
                                      rem(1:length(treatments), 8)<8);
+                hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+                relevantTreatments = relevantTreatments(hasUniformHwData);
+%                 landingTracks = [relevantTreatments.landingTracks];
+%                                  
+%                 % # of landing tracks
+%                 disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
             elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
+                relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
             else
                 error('What other treatments did you perform dude?')
             end
+            
             landingTracks = [relevantTreatments.landingTracks];
             startTimes = arrayfun(@(x) (x.startTime)*ones(length([x.landingTracks.state_LDF]), 1), ...
                 relevantTreatments, 'UniformOutput', false);
@@ -55,15 +79,16 @@ for ct_pattern = 1:length(pattern)
             
             
             dummy.state_LDF = [landingTracks.state_LDF];
-            dummy.pattern = (ct_pattern)*ones(1, length(dummy.state_LDF));
-            dummy.light = (ct_light)*ones(1, length(dummy.state_LDF));
+%             dummy.pattern = (ct_pattern)*ones(1, length(dummy.state_LDF));
+%             dummy.light = (ct_light)*ones(1, length(dummy.state_LDF));
+            dummy.wind = (ct_wind)*ones(1, length(dummy.state_LDF));
             dummy.day = days';
             dummy.time = startTimes';
             
             data_all = [data_all; dummy];
   
         end
-    end
+
 end
 % keyboard;
 
@@ -128,9 +153,9 @@ end
 %%
 close all;
 
-% Plot all individual tracks (every 35th track)
+% Plot all individual tracks (every 70th track)
 % Find Vrange
-skip_step = 35;
+skip_step = 700;
 Vrange = [];
 for ct=1:length(data_all)
     for ct1=1:skip_step:length(data_all(ct).state_LDF)
@@ -272,9 +297,9 @@ plot(-y,xyzuvw(:,5),'Color',[252,187,161]./255,'Linewidth',1);
 ylabel('V (m/s)', 'FontSize', 16);
 xlabel('y (m)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
-ylim([0 0.3]);
+% ylim([0 0.3]);
 yticks([0:0.1:0.3]);
-xlim([0 0.32]);
+% xlim([0 0.32]);
 y_in_yrange = -y(-y>=yrange(1) & -y<=yrange(2));
 plot(y_in_yrange, xyzuvw(-y>=yrange(1) & -y<=yrange(2), 5),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
 plot(y_in_yrange, rref_R*y_in_yrange,'LineWidth',2,'Color',[69 117 180]./255);
@@ -289,7 +314,7 @@ xlabel('y (m)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 % ylim([0 0.3]);
 % yticks([0:0.1:0.3]);
-xlim([0 0.32]);
+% xlim([0 0.32]);
 plot(y_in_yrange, -r(-y>=yrange(1) & -y<=yrange(2)),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
 plot(y_in_yrange, rref_R*ones(length(y_in_yrange),1),'LineWidth',2,'Color',[69 117 180]./255);
 plot([0 y_in_yrange(end)],[rref_R rref_R],'--','LineWidth',2,'Color',[69 117 180]./255);
@@ -345,15 +370,19 @@ plot(-y, xyzuvw(:,4)./-y, 'k')
 % view([-146 19])
 
 
-%% %%%%%%%%%%% Plot average approach for different light conditions averaged over patterns
+%% %%%%%%%%%%% Plot average approach for different wind conditions
 close all;
 ybins = -0.4:0.005:-0.01;
-colors = [227,74,51; 67,162,202; 253,212,158]./255;
-colors = [120 120 120; 67,162,202; 245 130 46]./255;
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0];
+
 fig1 = figure; hold on;
+winds = unique([data_all.wind]);
 yrange = [0.02 0.12];
-for ct_light=1:length(light)
-    tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).light == ct_light),1:length(data_all), 'UniformOutput', false);
+for ct_wind=1:length(data_all)
+    tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).wind == ct_wind),1:length(data_all), 'UniformOutput', false);
     tracks = [tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
     data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
     data_xyzuvw = vertcat(data_xyzuvw{:});
@@ -379,7 +408,7 @@ for ct_light=1:length(light)
     subplot(2,1,1); hold on;
     % plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
     % plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
-    fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_light,:), 'EdgeColor', colors(ct_light,:));
+    fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
 %     plot(-y,xyzuvw(:,5),'Color',[252,187,161]./255,'Linewidth',1);
     
 %     y_in_yrange = -y(-y>=yrange(1) & -y<=yrange(2));
@@ -389,7 +418,7 @@ for ct_light=1:length(light)
 %     title(['r* : ' num2str(rref_R,3)], 'FontSize', 16);
     
     subplot(2,1,2); hold on;
-    a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_light,:), 'EdgeColor', colors(ct_light,:));
+    a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
 %     plot(-y,-r,'Color',[252,187,161]./255,'Linewidth',1);
     
     % ylim([0 0.3]);
@@ -406,13 +435,13 @@ figure(fig1);
 subplot(2,1,1);
 ylabel('V (ms-1)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
-ylim([0 0.3]);
-yticks([0:0.1:0.3]);
-xlim([0 0.32]);
-xline(0.04); xline(0.11);
+% ylim([0 0.3]);
+% yticks([0:0.1:0.3]);
+% xlim([0 0.32]);
+% xline(0.04); xline(0.11);
 subplot(2,1,2);
 ylabel('r (s-1)', 'FontSize', 16);
 xlabel('y (m)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 xline(0.04); xline(0.11);
-legend(light);
+legend(winds);

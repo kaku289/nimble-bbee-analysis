@@ -31,21 +31,20 @@ addpath('./lib/hline_vline');
 
 % Inputs
 close all; clc;
-clear;
+% clear;
 
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1.mat';
-outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
-load(inputFile);
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
+outputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref.mat';
+% outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
+% load(inputFile);
 
-DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate';
+DirPlots = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate';
 % DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate_3dspeed';
-delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = false;
-savePDFs = false;
+delPreviousPlots = true; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = true;
+savePDFs = true;
 
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high', 'lower'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 rmse_func = @(idx, indices, data) sqrt(sum((data(indices(idx,1):indices(idx,2)) - mean(data(indices(idx,1):indices(idx,2)))).^2)/(indices(idx,2)-indices(idx,1)+1));
@@ -53,171 +52,161 @@ rmse_func = @(idx, indices, data) sqrt(sum((data(indices(idx,1):indices(idx,2)) 
 min_gap = 14; % the first straight line is between current point and (current point + min_gap)th point
 max_gap = 49;
 params = [0.53 4.22]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
-factors = [0.25:0.25:2.5];
+% factors = [0.25:0.25:2.5];
 time_window = [min_gap max_gap];
-% factors = [1];
+factors = [1];
 ct_data = 0;
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
-        for ct_behaviour = 2%1:length(behaviour)
-            
-            % Delete previous plots
-            if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]), 'dir')
-                rmdir(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]),'s');
-            end
+for ct_wind = 1:length(winds)
+    
+    for ct_behaviour = 2%1:length(behaviour)
         
-            % Create sub-directory for each treatment if it doesn't exist
-            if savePlots && ~exist(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]), 'dir')
-                mkdir(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]));
-            end
-            DirPlots_treatment = fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]);
-        
-           % Selecting relevant treatments
-            if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
-            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
-            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
-            else
-                error('What other treatments did you perform dude?')
-            end
-            
-            
-            for ct_treatment=1:length(relevantTreatments)
-                treatment = relevantTreatments(ct_treatment);
-                
-                videoTimes = [[treatment.videosInfo.startTime]' [treatment.videosInfo.endTime]'];
-                if ~isempty(treatment.landingTracks)
-                    disp(['Into, day: ' num2str(treatment.datenum) ...
-                          ', pattern: ' treatment.pattern ...
-                          ', light: ' treatment.light ...
-                          ', behaviour: ' behaviour{ct_behaviour}]);
-                    
-                      for ct_track=1:length(treatment.landingTracks) % for each landing track
-                          track = treatment.landingTracks(ct_track);
-                          for ct_excerpt=1:length(track.state_LDF) % for each track excerpt
-                              excerpt = track.state_LDF(ct_excerpt);
-                              
-                              excerpt.compute_rref(params, factors, time_window);
-%                               excerpt.compute_rref_with3dspeed(params, factors, time_window);
-                              
-                              if savePlots
-                                  for ct_factor=1:length(factors)
-
-                                      plotHandles = excerpt.plot_rrefs(factors(ct_factor));
-%                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
-
-                                      if ~isempty(plotHandles)
-
-                                          % Resizing the figures
-                                          for i=1:length(plotHandles)
-                                              plotHandles(i).Position(3) = 680;
-                                              plotHandles(i).Position(4) = 545;
-
-                                              if i==1
-                                                  figureName = ['fac_' num2str(factors(ct_factor),'%0.2f') '_' ...
-                                                              num2str(treatment.datenum) '_' ...
-                                                              num2str(treatment.startTime) '_' num2str(treatment.endTime) ...
-                                                              '_obj' num2str(track.obj_id) '_track' ...
-                                                              num2str(ct_track) '_excerpt' num2str(ct_excerpt) ...
-                                                              '.png'];
-                                              end
-
-                                              saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
-                                              
-                                              if savePDFs
-                                                  print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
-                                                      '.png','.pdf'), '-dpdf');
-                                              end
-                                          end
-
-                                          close(plotHandles);
-
-                                      end
-                                  end
-                              end
-                                  
-                          end % for excerpt
-                      end % for track
-                end
-            end % for treatment
-            
+        % Delete previous plots
+        if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]), 'dir')
+            rmdir(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]),'s');
         end
+        
+        % Create sub-directory for each treatment if it doesn't exist
+        if savePlots && ~exist(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]), 'dir')
+            mkdir(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]));
+        end
+        DirPlots_treatment = fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]);
+        
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+        
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+        
+        
+        for ct_treatment=1:length(relevantTreatments)
+            treatment = relevantTreatments(ct_treatment);
+            
+            videoTimes = [[treatment.videosInfo.startTime]' [treatment.videosInfo.endTime]'];
+            if ~isempty(treatment.landingTracks)
+                disp(['Into, day: ' num2str(treatment.datenum) ...
+                    ', wind: ' num2str(treatment.wind) ...
+                    ', behaviour: ' behaviour{ct_behaviour}]);
+                
+                for ct_track=1:length(treatment.landingTracks) % for each landing track
+                    track = treatment.landingTracks(ct_track);
+                    for ct_excerpt=1:length(track.state_LDF) % for each track excerpt
+                        excerpt = track.state_LDF(ct_excerpt);
+                        
+                        excerpt.compute_rref(params, factors, time_window);
+                        %                               excerpt.compute_rref_with3dspeed(params, factors, time_window);
+                        
+                        if savePlots
+                            for ct_factor=1:length(factors)
+                                
+                                plotHandles = excerpt.plot_rrefs(factors(ct_factor));
+                                %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
+                                
+                                if ~isempty(plotHandles)
+                                    
+                                    % Resizing the figures
+                                    for i=1:length(plotHandles)
+                                        plotHandles(i).Position(3) = 680;
+                                        plotHandles(i).Position(4) = 545;
+                                        
+                                        if i==1
+                                            figureName = ['fac_' num2str(factors(ct_factor),'%0.2f') '_' ...
+                                                num2str(treatment.datenum) '_' ...
+                                                num2str(treatment.startTime) '_' num2str(treatment.endTime) ...
+                                                '_obj' num2str(track.obj_id) '_track' ...
+                                                num2str(ct_track) '_excerpt' num2str(ct_excerpt) ...
+                                                '.png'];
+                                        end
+                                        
+                                        saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
+                                        
+                                        if savePDFs
+                                            print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
+                                                '.png','.pdf'), '-dpdf');
+                                        end
+                                    end
+                                    
+                                    close(plotHandles);
+                                    
+                                end
+                            end
+                        end
+                        
+                    end % for excerpt
+                end % for track
+            end
+        end % for treatment
+        
     end
 end
 keyboard
-save(outputFile, 'treatments');
+save(outputFile, 'treatments', '-v7.3', '-nocompression');
 keyboard;
 
 %% Extract rref data for statistical analysis
 clc; close all;
 % clear;
 
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
-load(inputFile);
-treatments = treatments(1:14*8); % Taking experiments for first 14 days
-% combination
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref.mat';
+% inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref_3dspeed.mat';
+% load(inputFile);
 
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high', 'lower'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 data = data4rrefEstimate.empty;
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
-        for ct_behaviour = 2%1:length(behaviour)
+for ct_wind = 1:length(winds)
+    for ct_behaviour = 2%1:length(behaviour)
         
-           % Selecting relevant treatments
-            if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
-            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
-            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
-            else
-                error('What other treatments did you perform dude?')
-            end
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+        
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+        
+        
+        for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
+            treatment = relevantTreatments(ct_treatment);
             
+            arrayfun(@(x) x.setLandingSide(),[treatment.landingTracks.state_LDF]'); % to store landing side in the rrefSegments
+            arrayfun(@(x) x.compute_params_basedon_3dspeed(), [treatment.landingTracks.state_LDF]');
             
-            for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
-                treatment = relevantTreatments(ct_treatment);
-                
-                arrayfun(@(x) x.setLandingSide(),[treatment.landingTracks.state_LDF]'); % to store landing side in the rrefSegments
-%                 arrayfun(@(x) x.compute_params_basedon_3dspeed(), [treatment.landingTracks.state_LDF]');
-                
-                data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
-                data1 = horzcat(data1{:});
-                
-                % Discard empty intervals
-                indices = arrayfun(@(x) ~isempty(x.intervals_ti), data1);
-                
-                % Save additional data
-                data1 = data1(indices);
-                [data1.pattern] = deal(ct_pattern);
-                [data1.light] = deal(ct_light);
-                [data1.day] = deal(treatment.datenum);
-                [data1.time] = deal(treatment.startTime);
-    
-                data = [data data1];
-%                 size(data)
-%                 keyboard;
-            end
+            data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
+            data1 = horzcat(data1{:});
+            
+            % Discard empty intervals
+            indices = arrayfun(@(x) ~isempty(x.intervals_ti), data1);
+            
+            % Save additional data
+            data1 = data1(indices);
+%             [data1.pattern] = deal(ct_pattern);
+%             [data1.light] = deal(ct_light);
+            [data1.wind] = deal(ct_wind);
+            [data1.day] = deal(treatment.datenum);
+            [data1.time] = deal(treatment.startTime);
+            
+            data = [data data1];
+            %                 size(data)
+            %                 keyboard;
         end
     end
 end
@@ -226,8 +215,8 @@ end
 % This file contains data for all the factors
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio.txt';
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_rref_Rstudio_3dspeed.txt';
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_all_rref_Rstudio.txt';
+% r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_all_rref_Rstudio_3dspeed.txt';
 factors = [0.25:0.25:2.5];
 data_write = [];
 for ct_factor=1:length(factors)
@@ -239,8 +228,9 @@ for ct_factor=1:length(factors)
     % Create nominal and ordinal variables
     approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
-    pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
-    light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    wind = arrayfun(@(i) data_fac(i).wind*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+%     pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+%     light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
@@ -256,8 +246,8 @@ for ct_factor=1:length(factors)
 %     logr = log(V);
         
     data_write = [data_write; ...
-        vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d];
+        vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -266,7 +256,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold', 'speed3d'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold', 'speed3d'});
     writetable(T,r_file);
 end
 
@@ -276,8 +266,8 @@ end
 % contain >1 r* segments
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio_3dspeed.txt';
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
+% r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_multiple_rrefs_Rstudio_3dspeed.txt';
 data_write = [];
 factors = [0.25:0.25:2.5];
 for ct_factor=1:length(factors)
@@ -294,8 +284,9 @@ for ct_factor=1:length(factors)
     % Create nominal and ordinal variables
     approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
-    pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
-    light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    wind = arrayfun(@(i) data_fac(i).wind*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+%     pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+%     light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
@@ -308,8 +299,8 @@ for ct_factor=1:length(factors)
 %     logr = log(V);
     
     data_write = [data_write; ...
-        vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -318,7 +309,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold'});
     writetable(T,r_file);
 end
 
@@ -327,7 +318,7 @@ end
 % contain exactly 1 r* segment
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_one_rrefs_Rstudio.txt';
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_one_rrefs_Rstudio.txt';
 data_write = [];
 factors = [0.25:0.25:2.5];
 for ct_factor=1:length(factors)
@@ -344,8 +335,9 @@ for ct_factor=1:length(factors)
     % Create nominal and ordinal variables
     approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
-    pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
-    light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    wind = arrayfun(@(i) data_fac(i).wind*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+%     pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+%     light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
@@ -358,8 +350,8 @@ for ct_factor=1:length(factors)
 %     logr = log(V);
     
     data_write = [data_write; ...
-        vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -368,12 +360,16 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold'});
     writetable(T,r_file);
 end
 
 
 %% Statistical analysis
+% Code below contains an attempt to do statistical analysis in Matlab. But
+% it is not useful as options for creating models are pretty limited in
+% matlab
+%
 writeFile = true;
 r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_rref_Rstudio.txt';
 for ct_factor=4%1:length(factors)

@@ -37,6 +37,7 @@ classdef data4rrefEstimate < handle
         pattern; % 1 (checkerboard) or 2 (spokes)
         light; % 1 (low), 2 (medium), 3 (high)
         side; % 1 (hive), 2 (food source)
+        wind; % 1 to 6
 
         
         % state for rref estimation - for legacy code
