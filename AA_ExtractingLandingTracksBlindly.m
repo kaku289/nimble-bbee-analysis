@@ -27,19 +27,26 @@ addpath('./lib/hline_vline');
 
 %% User inputs
 if isunix
-    rootDir = '/media/reken001/Disk_07/steady_wind_experiments/';
+    rootDir = '';
+    metadataDir = '/media/reken001/Disk_09/unsteady_wind_experiments/Metadata';
+    calibDir = '/media/reken001/Disk_09/unsteady_wind_experiments/Calibration/xml';
+    tempRHDir = '/media/reken001/Disk_09/unsteady_wind_experiments/TempRH';
+    trackingDir = '/media/reken001/Disk_12/unsteady_wind_experiments/postprocessing';
+    videosDir = '/media/reken001/Disk_09/unsteady_wind_experiments/Videos';
+    hotwirDir = '/media/reken001/Disk_09/unsteady_wind_experiments/Hotwire';
+    % videoScoringDir = 'postprocessing';
 elseif ispc
     rootDir = 'D:/steady_wind_experiments';
 end
 
 %% Initializing variables
-metadataDir = 'Metadata';
-calibDir = 'Calibration/xml';
-tempRHDir = 'TempRH';
-trackingDir = 'postprocessing';
-videosDir = 'Videos';
-hotwirDir = 'Hotwire';
-% videoScoringDir = 'postprocessing';
+% metadataDir = 'Metadata';
+% calibDir = 'Calibration/xml';
+% tempRHDir = 'TempRH';
+% trackingDir = 'postprocessing';
+% % videosDir = 'Videos';
+% hotwirDir = 'Hotwire';
+% % videoScoringDir = 'postprocessing';
 
 
 file2d = 'data2d_distorted.csv';
@@ -50,21 +57,21 @@ filecalib = 'calibration.xml';
 
 %% Creating treatments array
 % % Read treatment data from xlsx file
-treatmentSchedule = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','steady wind','Range','D4:N13');
-startTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','steady wind','Range','A5:A13');
-endTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','steady wind','Range','B5:B13');
+treatmentSchedule = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','C4:T13');
+startTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','A6:A13');
+endTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','B6:B13');
 
 % % Read manually clicked 2-D disc centers 
-discCenters_2d.Hive = readcell(fullfile(rootDir, trackingDir, 'Disc_centers.xlsx'),'FileType','spreadsheet','Sheet','light','Range','A2:I15');
-discCenters_2d.Feeder = readcell(fullfile(rootDir, trackingDir, 'Disc_centers.xlsx'),'FileType','spreadsheet','Sheet','light','Range','A19:I32');
+discCenters_2d.Hive = readcell(fullfile(rootDir, trackingDir, 'Disc_centers.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','A2:I22');
+discCenters_2d.Feeder = readcell(fullfile(rootDir, trackingDir, 'Disc_centers.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','A26:I46');
 cameras = {'Basler_22549584', 'Basler_22549585', 'Basler_22549587', 'Basler_22956425'};
 
 % Creating treatments array
-treatments = Steadywindtreatment.empty;
+treatments = Unsteadywindtreatment.empty;
 for ct_day=1:size(treatmentSchedule,2)
     for ct_treatment=1:8 % 8 treatments in a day including rising and sleeping
         
-        treatments(end+1) = Steadywindtreatment(treatmentSchedule{1,ct_day}, ...
+        treatments(end+1) = Unsteadywindtreatment(treatmentSchedule{1,ct_day}, ...
                             treatmentSchedule{2,ct_day}, 'highest', ...
                             treatmentSchedule{ct_treatment+2,ct_day}, ...
                             startTimes(ct_treatment), endTimes(ct_treatment));     
@@ -92,7 +99,7 @@ end
 
 %% Read hotwire data files
 createHWplots = true;
-plotDir = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/hotwire';
+plotDir = '/media/reken001/Disk_12/unsteady_wind_experiments/postprocessing/plots/hotwire';
 hotwireFiles = dir(fullfile(rootDir, hotwirDir, '2019*.csv'));
 
 for ct_treatment=1:length(treatments)
@@ -109,9 +116,11 @@ for ct_treatment=1:length(treatments)
 end
 %% Create hotwire plots for verification
 close all;
-cmap = jet(6);
-cmap([2 5],:) = [];
-cmap = [cmap; 1 0 1; 1 0 0];
+% cmap = jet(6);
+% cmap([2 5],:) = [];
+% cmap_meanVol = [cmap; 1 0 1; 1 0 0];
+cmap_meanVol = [1 0 0; 0 1 0; 0 0 1; 0 0.5 0.5];
+treatment2cmap = containers.Map([1 2 3 4 5 6 7 24 13   8 9 10 11 12 23 15   16 17 18 19 22 20   26 27], [1 1 1 1 1 1 1 1 1   2 2 2 2 2 2 2   3 3 3 3 3 3   4 4]);
 if createHWplots
     uniqueDates = unique([treatments.datenum]);
     for ct_date=1:length(uniqueDates)
@@ -127,13 +136,17 @@ if createHWplots
                 
         subplot(1,2,1);
         y=arrayfun(@(ct) (horzcat(ct.hwData.meanVoltage_persec{:})), treatments4date,'UniformOutput',false);
-        cmap2use = cmap; cmap2use(windOrder(cellfun(@(x) isempty(x),y)),:) = [];
+        cmap2use = cmap_meanVol(arrayfun(@(x) treatment2cmap(x), sort(windOrder)), :); 
+        if any(cellfun(@(x) isempty(x),y))
+            cmap2use(windOrder(cellfun(@(x) isempty(x),y)) == sort(windOrder) ,:) = [];
+        end
+        
         gscatter(vertcat(x{:}),horzcat(y{:}),vertcat(g{:}),cmap2use);
         xlabel('Treatments', 'FontSize', 16);
         ylabel('Mean voltages', 'FontSize', 16);
         set(gca, 'FontSize', 16);
         title(num2str(currentDate), 'FontSize', 12);
-        xlim([0 7]); xticks(1:6);
+        xlim([0 25]); xticks(sort(windOrder));
         
         subplot(1,2,2);
         y=arrayfun(@(ct) (horzcat(ct.hwData.stdVoltage_persec{:})), treatments4date,'UniformOutput',false);
@@ -142,7 +155,7 @@ if createHWplots
         ylabel('Std. voltages', 'FontSize', 16);
         set(gca, 'FontSize', 16);
         title(num2str(currentDate), 'FontSize', 12);
-        xlim([0 7]); xticks(1:6);
+        xlim([0 25]); xticks(sort(windOrder));
         
         figHandle.Position(3) = 1020;
         figHandle.Position(4) = 530;
@@ -156,7 +169,7 @@ if createHWplots
         hwData = [treatments4date.hwData]; hwFiles = vertcat(hwData.hwFiles); recordingDatetime = arrayfun(@(x) datetime(x.name(1:15), 'InputFormat', 'yyyyMMdd_HHmmss'), hwFiles);
         meanVoltage_persec = horzcat(hwData.meanVoltage_persec); recordingTime = horzcat(hwData.recordingTime);
         x=arrayfun(@(ct) repmat(recordingDatetime(ct),1,length(meanVoltage_persec{ct})), 1:length(recordingDatetime),'UniformOutput',false);
-        clr = arrayfun(@(ct) repmat(cmap(ct.wind,:),length(horzcat(ct.hwData.meanVoltage_persec{:})),1),treatments4date,'UniformOutput',false);
+        clr = arrayfun(@(ct) repmat(cmap_meanVol(treatment2cmap(ct.wind),:),length(horzcat(ct.hwData.meanVoltage_persec{:})),1),treatments4date,'UniformOutput',false);
 
         scatter(horzcat(x{:}), horzcat(meanVoltage_persec{:}), 5, vertcat(clr{:}));
         cellfun(@(x) xline(datetime([num2str(currentDate) '_' x], 'InputFormat', 'yyyyMMdd_HHmmss')), {'080000', '093000', '110000', '123000', '140000', '153000', '170000'});
