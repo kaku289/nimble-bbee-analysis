@@ -1482,7 +1482,7 @@ classdef filteredState_BlindLandingtrack < handle
 
             
         end
-        
+    
         
 %         function compute_rref1(obj, params, factors, time_window)
 %             % params - [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}] = [sigma1 sigma2]

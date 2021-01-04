@@ -377,10 +377,11 @@ for i=1:15:size(images,3)
 end
 
 %% Loading data and collecting segments with rref
-clc; close all;
+% clc; close all;
 % clear;
 % 
 % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 % load(inputFile);
 treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 

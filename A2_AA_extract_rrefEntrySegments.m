@@ -282,6 +282,8 @@ for ct_pattern = 1:length(pattern)
                 dummy = idtf(zeros(0,0,0));
                 for ct2=1:size(nPZ,1)
                     parfor ct1=1:length(estimatedData_prefiltered.iddata)
+                        % ADD initial condition as output. see tfest form
+                        % in help - DO THIS BEFORE RUNNING IT AGAIN
                         dummy(:,:,ct1,ct2) = tfest(estimatedData_prefiltered.iddata{ct1}, nPZ(ct2,1), nPZ(ct2,2), opt);
                     end
                 end
@@ -365,7 +367,8 @@ end
 %% Loading data and save plots for a specified factor
 % Plots are plotted for each track and highlights rref segment(s), entry
 % segment(s), filtered data, and data estimated from system identification
-clc; clear; close all;
+clc; close all;
+% clear;
 if isunix
     dataFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1.mat';
     DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation';
@@ -385,8 +388,8 @@ chosen_fac = 1;
 % behaviour = {'rising','constant','sleeping'};
 
 assert(length(pattern)==size(data_all,1) && length(light)==size(data_all,2));
-for ct_pattern=1:length(pattern)
-    for ct_light=1:length(light)
+for ct_pattern=2%1:length(pattern)
+    for ct_light=3%1:length(light)
         % Delete previous plots
         if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]), 'dir')
             rmdir(fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]),'s');
@@ -398,7 +401,7 @@ for ct_pattern=1:length(pattern)
         end
         DirPlots_treatment = fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]);
         
-        for ct1=1:length(data_all(ct_pattern,ct_light).tracks_fac)
+        for ct1=151%1:length(data_all(ct_pattern,ct_light).tracks_fac)
             % create tf vector in order of rrefEntrySegments
             tfs = data4est_lowpass{ct_pattern,ct_light}.tfest(:,:,data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1, 2);
             sysiddata = data4est_lowpass{ct_pattern,ct_light}.iddata(data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1);
@@ -434,6 +437,50 @@ for ct_pattern=1:length(pattern)
         end
     end
 end
+
+%% Compare rise times from 3 following conditions:
+% 1) data with tf simulation -  This is to make sure if second-order tf is a good approximation of the closed-loop control system
+% 2) Actual data
+% 3) Low-pass filtered data 
+%
+model_order_indx = 2;
+labels = cell(0, 1); % for x-axis of boxplots
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
+diff_tr_actual_tf = cell(0, 1); % differences in rise times between actual data and second-order tf
+diff_tr_actual_lowpass = cell(0, 1); % differences in rise times between actual data and second-order tf
+dt = 0.00571966171264648;
+rEdges = [0.5 0.7];
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        labels{ct_pattern, ct_light} = [light_label{data_all(ct_pattern,ct_light).ct_light} '' pattern_label{data_all(ct_pattern,ct_light).ct_pattern}];
+        
+        n = length(data4est_lowpass{ct_pattern, ct_light, 1}.track_indexes);
+        %                 AICc{ct_order, 1} = [AICc{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AICc,1:n)];
+        fitPercent{ct_pattern, ct_light} = arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light}.tfest(:,:,x,model_order_indx).Report.Fit.FitPercent,1:n);
+        
+        for ct=1:n
+            rref = data4est{ct_pattern, ct_light}.iddata{ct}.u(1);
+            r = data4est{ct_pattern, ct_light}.iddata{ct}.y;
+              
+            if any(r<rEdges(1)*rref) && any(r>rEdges(2)*rref) % && fitPercent{ct_pattern, ct_light}(ct)>95
+                tr_actual = diff(interp1(r, [0:length(r)-1]*dt, rEdges'*rref));
+                tr_lowpass = diff(interp1(data4est_lowpass{ct_pattern, ct_light}.iddata{ct}.y, [0:length(r)-1]*dt, rEdges'*rref));
+                [rsim,fit,rsim0] = compare(data4est_lowpass{ct_pattern, ct_light}.iddata{ct}, data4est_lowpass{ct_pattern, ct_light}.tfest(:,:,ct,model_order_indx));
+                tr_simulated = diff(interp1(rsim.y, [0:length(rsim.y)-1]*dt, rEdges'*rref));
+                diff_tr_actual_tf{ct_pattern, ct_light}(ct) = tr_actual - tr_simulated;   
+                diff_tr_actual_lowpass{ct_pattern, ct_light}(ct) = tr_actual - tr_lowpass;   
+            else
+                diff_tr_actual_tf{ct_pattern, ct_light}(ct) = nan;  
+                diff_tr_actual_lowpass{ct_pattern, ct_light}(ct) = nan;
+            end
+        end
+    end
+end
+
+createBoxPlot({diff_tr_actual_tf{:}}', {labels{:}}', 'Diff. in rise times between simulated and actual (s)');
+createBoxPlot({diff_tr_actual_lowpass{:}}', {labels{:}}', 'Diff. in rise times between lowpass and actual (s)');
+
 
 %% Create fit percent boxplots and free parameters boxplots
 % % Fit percent boxplots
@@ -1573,7 +1620,7 @@ factors = [0.25:0.25:2.5];
 
 data_all = struct.empty;
 
-rPercentIntervalsACC = 50:40:90; % in percent of r*
+rPercentIntervalsACC = 15:15:90; % in percent of r*
 rPercentIntervalsDEC = 190:-10:110; % in percent of r*
 
 rIntervals = 0.5:0.5:10; % in terms of r
@@ -1582,7 +1629,9 @@ rIntervals = 0.5:0.5:10; % in terms of r
 risetimesACC = cell.empty;
 distanceACC = cell.empty;
 velocityACC = cell.empty;
+deltarACC = cell.empty;
 accACC = cell.empty;
+meanDistanceACC = cell.empty;
 meanVelocityACC = cell.empty;
 meanAccACC = cell.empty;
 meanRdotACC = cell.empty;
@@ -1591,11 +1640,17 @@ approachACC = cell.empty;
 landingSideACC = cell.empty;
 timeACC = cell.empty;
 dayACC = cell.empty;
+r0ACC = cell.empty; % r at rPercentIntervalsACC(1)
+rdot0ACC = cell.empty; % rdot at rPercentIntervalsACC(1)
+rdot0_filteredACC = cell.empty; % rdot at rPercentIntervalsACC(1)
+
 
 risetimesDEC = cell.empty;
 distanceDEC = cell.empty;
 velocityDEC = cell.empty;
+deltarDEC = cell.empty;
 accDEC = cell.empty;
+meanDistanceDEC = cell.empty;
 meanVelocityDEC = cell.empty;
 meanAccDEC = cell.empty;
 meanRdotDEC = cell.empty;
@@ -1606,6 +1661,7 @@ timeDEC = cell.empty;
 dayDEC = cell.empty;
 
 entryData = cell.empty;
+fc= 5; % Hz
 
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
@@ -1656,7 +1712,9 @@ for ct_pattern = 1:length(pattern)
                 risetimesACC{ct_pattern, ct_light, ct_fac} = [];
                 distanceACC{ct_pattern, ct_light, ct_fac} = [];
                 velocityACC{ct_pattern, ct_light, ct_fac} = [];
+                deltarACC{ct_pattern, ct_light, ct_fac} = [];
                 accACC{ct_pattern, ct_light, ct_fac} = [];
+                meanDistanceACC{ct_pattern, ct_light, ct_fac} = [];
                 meanVelocityACC{ct_pattern, ct_light, ct_fac} = [];
                 meanAccACC{ct_pattern, ct_light, ct_fac} = [];
                 meanRdotACC{ct_pattern, ct_light, ct_fac} = [];
@@ -1665,11 +1723,16 @@ for ct_pattern = 1:length(pattern)
                 landingSideACC{ct_pattern, ct_light, ct_fac} = [];
                 timeACC{ct_pattern, ct_light, ct_fac} = [];
                 dayACC{ct_pattern, ct_light, ct_fac} = [];
+                r0ACC{ct_pattern, ct_light, ct_fac} = [];
+                rdot0ACC{ct_pattern, ct_light, ct_fac} = [];
+                rdot0_filteredACC{ct_pattern, ct_light, ct_fac} = [];
 
                 risetimesDEC{ct_pattern, ct_light, ct_fac} = [];
                 distanceDEC{ct_pattern, ct_light, ct_fac} = [];
                 velocityDEC{ct_pattern, ct_light, ct_fac} = [];
+                deltarDEC{ct_pattern, ct_light, ct_fac} = [];
                 accDEC{ct_pattern, ct_light, ct_fac} = [];
+                meanDistanceDEC{ct_pattern, ct_light, ct_fac} = [];
                 meanVelocityDEC{ct_pattern, ct_light, ct_fac} = [];
                 meanAccDEC{ct_pattern, ct_light, ct_fac} = [];
                 meanRdotDEC{ct_pattern, ct_light, ct_fac} = [];
@@ -1683,17 +1746,29 @@ for ct_pattern = 1:length(pattern)
                 
                 for ct1=1:sum(indices) % for each state_LDF
                     state = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).filteredState;
-                    y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3); t = state(:,1)-state(1,1);
-                    rdot = diffxy(t, r);
+                    y = -state(:,3); V = state(:,6); ay = state(:,9); r = -state(:,6)./state(:,3); t = state(:,1)-state(1,1); 
+                    rdot = diffxy(t, r); dt = t(2)-t(1);
                     
                     rrefEntrySegments_fac = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
                     
                     for ct2=1:size(rrefEntrySegments_fac.intervals,1)
                         entryStart_indx = rrefEntrySegments_fac.intervals(ct2,1);
                         entryEnd_indx = rrefEntrySegments_fac.intervals(ct2,2);
+                        steadyEnd_indx = rrefEntrySegments_fac.intervals(ct2,3);
                         
                         rref = -rrefEntrySegments_fac.rmean(ct2);
-                        V_part = V(entryStart_indx:entryEnd_indx); ay_part = ay(entryStart_indx:entryEnd_indx); rdot_part = rdot(entryStart_indx:entryEnd_indx);
+                        
+                        % make entryEnd_indx to be one after 90%rref or
+                        % until r is increasing
+                        if r(entryEnd_indx) < 0.9*rref
+%                             entryEnd_indx = entryEnd_indx + find(r(entryEnd_indx:steadyEnd_indx)>0.9*rref,1) - 1;
+                            entryEnd_indx = entryEnd_indx + find(diff(r(entryEnd_indx:steadyEnd_indx))<0,1) - 1;
+                        end
+                        
+                        y_part = y(entryStart_indx:entryEnd_indx); V_part = V(entryStart_indx:entryEnd_indx); ay_part = ay(entryStart_indx:entryEnd_indx);
+                        rdot_part = rdot(entryStart_indx:entryEnd_indx);
+%                         [num, den] = butter(2, fc/(1/dt/2),'low');
+%                         r_filt = filtfilt(num, den, r(entryStart_indx:steadyEnd_indx)); rdot_filt = diffxy([0:1:length(r_filt)-1]'*dt, r_filt);
                         
                         entryData{ct_fac} = [entryData{ct_fac}; ...
                                               t(entryStart_indx:entryEnd_indx)  y(entryStart_indx:entryEnd_indx) ...
@@ -1719,12 +1794,20 @@ for ct_pattern = 1:length(pattern)
                             y_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), y(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
                             V_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), V(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
                             a_at_rBinValues = interp1(r(entryStart_indx:entryEnd_indx), ay(entryStart_indx:entryEnd_indx), rBinValues, 'makima', nan);
+                            rdot_at_rBinValues = interp1(t(entryStart_indx:entryEnd_indx), rdot_part,  t_at_rBinValues, 'makima', nan);
                             
+                            if any(diff(t_at_rBinValues) < 0) %isnan(diff(t_at_rBinValues))
+                                keyboard;
+                            end
                             risetimesACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(t_at_rBinValues);
                             distanceACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(y_at_rBinValues);
                             velocityACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(V_at_rBinValues);
+                            deltarACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(rBinValues) + diff(t_at_rBinValues) - diff(t_at_rBinValues);
                             accACC{ct_pattern, ct_light, ct_fac}(end+1,:) = diff(a_at_rBinValues);
                             
+                            meanDistanceACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(y_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
+                                                                                               r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
+                                                                                     + diff(t_at_rBinValues) - diff(t_at_rBinValues); % + diff(t_at_rBinValues) - diff(t_at_rBinValues) is used to make values nan where diff(t_at_rBinValues) is also nan 
                             meanVelocityACC{ct_pattern, ct_light, ct_fac}(end+1,:) = arrayfun(@(x) mean(V_part(r(entryStart_indx:entryEnd_indx) > rBinValues(x) & ...
                                                                                                r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
                                                                                      + diff(t_at_rBinValues) - diff(t_at_rBinValues); % + diff(t_at_rBinValues) - diff(t_at_rBinValues) is used to make values nan where diff(t_at_rBinValues) is also nan 
@@ -1735,6 +1818,14 @@ for ct_pattern = 1:length(pattern)
                                                                                                r(entryStart_indx:entryEnd_indx) <= rBinValues(x+1))),1:length(rBinValues)-1) ...
                                                                                      + diff(t_at_rBinValues) - diff(t_at_rBinValues);
                             rrefACC{ct_pattern, ct_light, ct_fac}(end+1,:) = rref*ones(1,length(rBinValues)-1);
+                            
+                            % at the beginning of complete rise segment
+%                             r0ACC{ct_pattern, ct_light, ct_fac}(end+1,:) = r(entryStart_indx)*ones(1,length(rBinValues)-1);
+%                             rdot0ACC{ct_pattern, ct_light, ct_fac}(end+1,:) = rdot(entryStart_indx)*ones(1,length(rBinValues)-1);
+                            
+                            % at the beginning of each bin segment
+                            r0ACC{ct_pattern, ct_light, ct_fac}(end+1,:) = rBinValues(1:end-1);
+                            rdot0ACC{ct_pattern, ct_light, ct_fac}(end+1,:) = rdot_at_rBinValues(1:end-1);
                             
                             approachACC{ct_pattern, ct_light, ct_fac}(end+1,:) = ct1*ones(1,length(rBinValues)-1);
                             if strcmpi(data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).landingSide,"Hive")
@@ -1760,6 +1851,7 @@ end
 % required columns =
 clc;
 writeFile = true;
+removeNAN = true;
 % r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
 r_file = 'D:/light_intensity_experiments/postprocessing/absolute_rTransientsData_ACC_Rstudio.txt';
 data_write = [];
@@ -1781,10 +1873,14 @@ for ct_fac=1:length(factors)
                           risetimesACC{ct_pattern, ct_light, ct_fac}(:) ...
                           distanceACC{ct_pattern, ct_light, ct_fac}(:) ...
                           velocityACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          deltarACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          meanDistanceACC{ct_pattern, ct_light, ct_fac}(:) ...
                           meanVelocityACC{ct_pattern, ct_light, ct_fac}(:) ...
                           meanAccACC{ct_pattern, ct_light, ct_fac}(:) ...
                           meanRdotACC{ct_pattern, ct_light, ct_fac}(:) ...
                           rrefACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          r0ACC{ct_pattern, ct_light, ct_fac}(:) ...
+                          rdot0ACC{ct_pattern, ct_light, ct_fac}(:) ...
                           approach_number+approachACC{ct_pattern, ct_light, ct_fac}(:) ...
                           landingSideACC{ct_pattern, ct_light, ct_fac}(:) ...
                           timeACC{ct_pattern, ct_light, ct_fac}(:) ...
@@ -1795,15 +1891,193 @@ for ct_fac=1:length(factors)
         end
     end
 end
+if removeNAN
+    data_write(isnan(data_write(:,4)) | data_write(:,14)<0,:) = [];
+end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'rbins', 'pattern', 'light', 'delta_t', 'delta_y', 'delta_V', 'mean_V', 'mean_a', 'mean_rdot', 'rref', ...
+        'VariableNames',{'rbins', 'pattern', 'light', 'delta_t', 'delta_y', 'delta_V', 'delta_r', 'mean_y', 'mean_V', 'mean_a', 'mean_rdot', 'rref', 'r0', 'rdot0', ...
                          'approach','landingSide','time','day','factor'});
     writetable(T,r_file);
 end
 
+%% Plot rise time as a function of rdot and rref 
+close all;
+% For 30-45%
 
+
+% For 45-60%
+data_ss = data_write(data_write(:,1)==3 & abs(data_write(:,end) - 1.75) < 1e-6 & data_write(:,18) <= 20190710,:);
+rref = data_ss(:,12); rdot0 = data_ss(:,14); delta_t = data_ss(:,4); light = data_ss(:,3);
+
+% Untransformed domain
+y = delta_t; x1 = rref; x2 = rdot0;
+% plot3(log(rref), log(rdot0), log(delta_t),'.')
+yrange = [min(y) max(y)];
+% yrange = [floor(yrange(1)*1000)/1000 ceil(max(yrange(2))*1000)/1000];
+yrange = [round(yrange(1)*100)/100 round(max(yrange(2))*100)/100];
+
+% Choose colormap and find data edges for V in Vrange
+cmap = jet(round(diff(yrange)/0.01));
+edges = round(linspace(yrange(1),yrange(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+figure2d = figure;hold on;
+colormap(cmap);
+for ct=1:3 % for each light condition
+    subplot(1,3,ct);
+    y_ss = y(light==ct);
+    [data_cmap, ~] = discretize(y_ss, edges);
+    data_cmap(y_ss<=edges(1)) = 1; data_cmap(y_ss>=edges(end)) = size(cmap,1);
+    scatter(x1(light==ct), x2(light==ct), 10, cmap(data_cmap',:),'filled','o');
+    set(gca, 'FontSize', 16);
+end
+figure(figure2d);
+cmap_bar = colorbar('eastoutside');
+caxis(edges([1 end]));
+cmap_bar.Ticks = [edges(1) edges(end)];
+cmap_bar.Label.String = 'delta_t';
+cmap_bar.Label.FontSize = 16;
+ylabel('rdot0 (s-2)', 'FontSize', 14);
+xlabel('rref (s-1)', 'FontSize', 14);
+
+%% % %  log domain
+close all;
+chosen_fac = 1.5;
+for rbin = 4%2:5
+    data_ss = data_write(data_write(:,1)==rbin & abs(data_write(:,end) - chosen_fac) < 1e-6 & data_write(:,18) <= 20190710,:);
+    rref = data_ss(:,12); rdot0 = data_ss(:,14); delta_t = data_ss(:,4); light = data_ss(:,3);
+    y = log(delta_t); x1 = log(rref); x2 = log(rdot0);
+    
+    yrange = [min(y) max(y)];
+    yrange = [round(yrange(1)*10)/10 round(max(yrange(2))*10)/10];
+
+    % Choose colormap and find data edges for V in Vrange
+    cmap = jet(round(diff(yrange)/0.1));
+    edges = round(linspace(yrange(1),yrange(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+    figure2d = figure; hold on;
+    colormap(cmap);
+    
+    % Fit from R
+    if rbin==2
+        y_est = @(x1,x2,light) -2.23580-0.78793*x2+0.48181*x1+0.14966*x1*x2+light; light_intercepts = [0 -0.05197 -0.09037];
+    elseif rbin==3
+        y_est = @(x1,x2,light) -2.57597-0.61084*x2+0.73729*x1+light; light_intercepts = [0 -0.04894 -0.06576];
+    elseif rbin==4
+        y_est = @(x1,x2,light) -2.52836-0.61336*x2+0.68441*x1+light; light_intercepts = [0 -0.01388 -0.04033];
+    elseif rbin==5
+        y_est = @(x1,x2,light) -2.62646-0.54172*x2+0.80827*x1-0.06759*x1*x2+light; light_intercepts = [0 -0.04770 -0.06759];
+    end
+
+    for ct=1:3 % for each light condition
+        subplot(1,3,ct); hold on;
+        caxis(edges([1 end])); fcontour(@(x1,x2) y_est(x1,x2,light_intercepts(ct)), [floor(min(x1)) ceil(max(x1)*10)/10 0 ceil(max(x2)*10)/10], 'Fill', 'on', 'LevelList', (edges(1:end-1)+edges(2:end))/2);
+
+        y_ss = y(light==ct);
+        [data_cmap, ~] = discretize(y_ss, edges);
+        data_cmap(y_ss<=edges(1)) = 1; data_cmap(y_ss>=edges(end)) = size(cmap,1);
+        scatter(x1(light==ct), x2(light==ct), 20, cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 0 0]);
+        set(gca, 'FontSize', 16);
+        xlim([floor(min(x1)) ceil(max(x1)*10)/10]);
+    %     ylim([floor(min(x2)) ceil(max(x2)*10)/10]);
+        ylim([0 ceil(max(x2)*10)/10]);
+        cmap_bar = colorbar('northoutside');
+        caxis(edges([1 end]));
+        cmap_bar.Ticks = [edges(1) edges(end)];
+        cmap_bar.Label.String = 'log(delta t)';
+        cmap_bar.Label.FontSize = 16;
+
+    end
+    figure(figure2d);
+    subplot(1,3,1);
+    ylabel('log(rdot0) (s-2)', 'FontSize', 14);
+    title('low light', 'FontSize', 14);
+    subplot(1,3,2);
+    xlabel('log(r*) (s-1)', 'FontSize', 14);
+    title('medium light', 'FontSize', 14);
+    subplot(1,3,3);
+    title('high light', 'FontSize', 14);
+
+    
+    figure3d = figure; hold on;
+    colormap(cmap);
+    % Fit from R
+    y_est = @(x1,x2,light) -2.55985-0.61423*x2+0.72759*x1+light; light_intercepts = [0 -0.04157 -0.06486];
+    x1_grid = floor(min(x1)):0.1:ceil(max(x1)*10)/10;
+    x2_grid = 0:0.1:ceil(max(x2)*10)/10;
+    [X1, X2] = meshgrid(x1_grid, x2_grid);
+    for ct=1:3 % for each light condition
+        subplot(1,3,ct); hold on;
+        caxis(edges([1 end])); surf(X1, X2, y_est(X1, X2,light_intercepts(ct)), 'EdgeColor', 'none');
+        
+        
+        y_ss = y(light==ct);
+        [data_cmap, ~] = discretize(y_ss, edges);
+        data_cmap(y_ss<=edges(1)) = 1; data_cmap(y_ss>=edges(end)) = size(cmap,1);
+        scatter3(x1(light==ct), x2(light==ct), y_ss, 20, cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 0 0]);
+        set(gca, 'FontSize', 16);
+        xlim([floor(min(x1)) ceil(max(x1)*10)/10]);
+        %     ylim([floor(min(x2)) ceil(max(x2)*10)/10]);
+        ylim([0 ceil(max(x2)*10)/10]);
+        cmap_bar = colorbar('northoutside');
+        caxis(edges([1 end]));
+        cmap_bar.Ticks = [edges(1) edges(end)];
+        cmap_bar.Label.String = 'log(delta t)';
+        cmap_bar.Label.FontSize = 16;
+        
+    end
+    figure(figure3d);
+    subplot(1,3,1);
+    zlabel('log(delta t) (s-2)', 'FontSize', 14);
+    ylabel('log(rdot0) (s-2)', 'FontSize', 14);
+    xlabel('log(r*) (s-1)', 'FontSize', 14);
+    title('low light', 'FontSize', 14);
+    subplot(1,3,2);
+    zlabel('log(delta t) (s-2)', 'FontSize', 14);
+    ylabel('log(rdot0) (s-2)', 'FontSize', 14);
+    xlabel('log(r*) (s-1)', 'FontSize', 14);
+    title('medium light', 'FontSize', 14);
+    subplot(1,3,3);
+    zlabel('log(delta t) (s-2)', 'FontSize', 14);
+    ylabel('log(rdot0) (s-2)', 'FontSize', 14);
+    xlabel('log(r*) (s-1)', 'FontSize', 14);
+    title('high light', 'FontSize', 14);
+    
+    keyboard;
+
+end
+
+figure; colormap(cmap); caxis(edges([1 end])); fcontour(y_est, [floor(min(x1)) ceil(max(x1)*10)/10 0 ceil(max(x2)*10)/10], 'Fill', 'on', 'LevelList', (edges(1:end-1)+edges(2:end))/2); colorbar('northoutside');
+figure; contourf(X1, X2, Y, edges); colormap(cmap);
+
+Y = y_est(X1, X2);
+figure;  view(2)
+for ct=1:3 % for each light condition
+    
+end
+
+%% Plot rise time vs meany vs meanr
+mean_y = data_write(:,8);
+rref = data_write(:,12);
+riseTimes = data_write(:,4);
+light = data_write(:,3); f = data_write(:,end);
+figure;
+% scatter3(mean_y,rref,riseTimes,...
+%         'MarkerEdgeColor','k',...
+%         'MarkerFaceColor',[0 .75 .75])
+scatter3(log(mean_y),log(rref),log(riseTimes),4,...
+        'MarkerEdgeColor','k',...
+        'MarkerFaceColor',[0 .75 .75])
+view(-30,10);
+xlabel('Mean y (m)', 'FontSize', 16);
+ylabel('r* (1/s)', 'FontSize', 16);
+zlabel('delta t (s)', 'FontSize', 16);
+set(gca, 'FontSize', 18); grid on;
+view([0 0]);
+view([90 0]);
+view([0 90]);
+% xlim([0 Inf]); ylim([0 Inf]);
 % writing absolute change in r file
 %%
 % close all;
