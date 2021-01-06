@@ -290,18 +290,26 @@ end
 % contain >1 r* segments
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio_3dspeed.txt';
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
+% r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio_3dspeed.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
+end
+
+
 data_write = [];
 factors = [0.25:0.25:2.5];
 for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
     
     % Choose segments that contain >1 r* segments
     has_multiple_rrefs = arrayfun(@(x) size(x.intervals_ti,1) > 1,data_fac);
     data_fac = data_fac(has_multiple_rrefs);
+    hasTakeoff_fac = hasTakeoff_fac(has_multiple_rrefs);
     
     N = length(data_fac);
     
@@ -313,6 +321,8 @@ for ct_factor=1:length(factors)
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
+    hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
     % create other variables
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
@@ -323,7 +333,7 @@ for ct_factor=1:length(factors)
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) vertcat(hasTakeoff_fac{:})];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -332,7 +342,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold','hasTakeoff'});
     writetable(T,r_file);
 end
 
@@ -341,17 +351,23 @@ end
 % contain exactly 1 r* segment
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_one_rrefs_Rstudio.txt';
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_one_rrefs_Rstudio.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_one_rrefs_Rstudio.txt';
+end
 data_write = [];
 factors = [0.25:0.25:2.5];
 for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
     
     % Choose segments that contain >1 r* segments
     has_one_rref = arrayfun(@(x) size(x.intervals_ti,1) == 1, data_fac);
     data_fac = data_fac(has_one_rref);
+    hasTakeoff_fac = hasTakeoff_fac(has_one_rref);
     
     N = length(data_fac);
     
@@ -363,6 +379,8 @@ for ct_factor=1:length(factors)
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
+    hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
     % create other variables
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
@@ -373,7 +391,7 @@ for ct_factor=1:length(factors)
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) vertcat(hasTakeoff_fac{:})];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -382,7 +400,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold','hasTakeoff'});
     writetable(T,r_file);
 end
 

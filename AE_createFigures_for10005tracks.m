@@ -2,10 +2,15 @@
 %
 
 % Extract all 10005 approaches
-close all;
-clc; clear;
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-load(inputFile);
+close all; clc; 
+% clear;
+if isunix
+    inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
+elseif ispc
+    inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+end
+% load(inputFile);
 treatments = treatments(1:14*8);
 
 pattern = {'checkerboard', 'spokes'};
@@ -53,12 +58,19 @@ for ct_pattern = 1:length(pattern)
             % # of distinct state LDFs
             disp(['# of distinct state LDFs: ' num2str(length([landingTracks.state_LDF]))]);
             
+            hastakeoff_pertreatment = cell(0,1);
+            for ct_treatment = 1:length(relevantTreatments)
+                treatment = relevantTreatments(ct_treatment);
+                hastakeoff_pertreatment{ct_treatment} = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs),[treatment.landingTracks.state_LDF]);
+            end
+            hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
             
             dummy.state_LDF = [landingTracks.state_LDF];
             dummy.pattern = (ct_pattern)*ones(1, length(dummy.state_LDF));
             dummy.light = (ct_light)*ones(1, length(dummy.state_LDF));
             dummy.day = days';
             dummy.time = startTimes';
+            dummy.hastakeoff_pertreatment = hastakeoff_pertreatment;
             
             data_all = [data_all; dummy];
   
@@ -69,8 +81,12 @@ end
 
 
 % %  Write file for analysis in R for 10005 tracks
-writeFile = false;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_trajs_Rstudio.txt';
+writeFile = true;
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_trajs_Rstudio.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_all_trajs_Rstudio.txt';
+end
 data_write = [];
 approach_no = 0;
 yrange = [-0.12 -0.02];
@@ -105,14 +121,14 @@ if writeFile
             light = data_all(ct).light(ct1)*ones(N, 1);
             time = data_all(ct).time(ct1)*ones(N, 1);
             day = data_all(ct).day(ct1)*ones(N, 1);
-
+            hastakeoff = data_all(ct).hastakeoff_pertreatment(ct1)*ones(N, 1);
 
 
             %     logy = log(y);
             %     logr = log(V);
 
             data_write = [data_write; ...
-                approach side pattern light time day y r v];
+                approach side pattern light time day y r v hastakeoff];
 
         end
     end
@@ -120,7 +136,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','hasTakeoff'});
     writetable(T,r_file);
 end
 
