@@ -35,16 +35,26 @@ addpath('./lib/boxplot2-pkg/minmax');
 
 % Inputs
 close all; clc;
-clear;
+% clear;
 
-inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
-load(inputFile);
+if isunix
+    inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+    outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+    DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_with_time';
+    % DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry';
+    % DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate_3dspeed';
+elseif ispc
+    inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+    outputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_with_time';
+end
 
-DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry';
-% DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate_3dspeed';
+
+% load(inputFile);
+
+
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = false;
+savePlots = true;
 savePDFs = false;
 
 pattern = {'checkerboard', 'spokes'};
@@ -107,7 +117,8 @@ for ct_pattern = 1:length(pattern)
                               if savePlots
                                   for ct_factor=1:length(factors)
 
-                                      plotHandles = excerpt.plot_rrefsEntry(factors(ct_factor));
+                                      plotHandles = excerpt.plot_rrefsEntry_with_time(factors(ct_factor));
+%                                       plotHandles = excerpt.plot_rrefsEntry(factors(ct_factor));
 %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
 
                                       if ~isempty(plotHandles)
@@ -151,6 +162,8 @@ end
 keyboard
 save(outputFile, 'treatments');
 keyboard;
+
+
 
 %% Run estimation of entry dynamics
 % a) data is prefiltered
@@ -587,6 +600,8 @@ plot([ystart_entry{:}],vertcat(zeta{:}),'.'); ylim([-Inf 0.2]);
 %% Create contour plot of accleration on 
 % 1) r/r* and y plane (distance to start of rref interval)
 % 2) r/r* and time plane (time to start of rref interval)
+pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
+light_label = {'L', 'M', 'H'};
 
 yentryend = cell(0,1); % starting y at rref entry
 tentryend = cell(0,1); % starting y at rref entry
@@ -1620,7 +1635,7 @@ factors = [0.25:0.25:2.5];
 
 data_all = struct.empty;
 
-rPercentIntervalsACC = 15:15:90; % in percent of r*
+rPercentIntervalsACC = 30:60:90; % in percent of r*
 rPercentIntervalsDEC = 190:-10:110; % in percent of r*
 
 rIntervals = 0.5:0.5:10; % in terms of r

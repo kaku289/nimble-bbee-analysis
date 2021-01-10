@@ -959,7 +959,7 @@ classdef filteredState_BlindLandingtrack < handle
                     t_interval = t_all(rrefEntry_interval(1):rrefEntry_interval(2));
                     r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
                     y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
-                    v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    v_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
                     intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
                     obj.rrefEntrySegments(ct).const_rvst(ct1,1) = intercept_slope(1);
                     obj.rrefEntrySegments(ct).slope_rvst(ct1,1) = intercept_slope(2);
@@ -975,9 +975,7 @@ classdef filteredState_BlindLandingtrack < handle
                     obj.rrefEntrySegments(ct).delta_y_actual(ct1,1) = abs(diff(y_interval([1 end])));
                     
                     tspan = [0 abs(diff(t_interval([1 end])))];
-                    y0 = [y_interval(1) v_interval(1)]; rdot = intercept_slope(2);
-                    [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
-                    obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
+                    y0 = [y_interval(1) 
                     
                     if -r_interval(1) < -r_interval(end)
                         obj.rrefEntrySegments(ct).isRise(ct1,1) = true;
@@ -1827,8 +1825,8 @@ classdef filteredState_BlindLandingtrack < handle
             % used in ode45 for integration
             % rdot - the constant value of dr/dt at which bbee is flying
             
-            dydt(1,1) = y(2);
-            dydt(2,1) = (rdot*y(1)^2+y(2)^2)./y(1);
+            dydt(1) = y(2);
+            dydt(2) = (rdot*y(1)^2+y(2)^2)./y(1);
             
         end
         
