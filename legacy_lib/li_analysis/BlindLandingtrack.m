@@ -2,18 +2,9 @@ classdef BlindLandingtrack < handle
     properties (Access = public)
         
         foldername = ''; % file that contains the track
-        
-        datenum; % date on which the track was obtained
-        pattern;
-        patternnum;
-        setID;
-        beeID;
-        flightID;
-        filename;
-        basedir;
-        
-        
-        
+        datenum = ''; % date on which the track was obtained
+                
+        pattern = '';
         light = '';
         
         obj_id = []; 
@@ -35,8 +26,7 @@ classdef BlindLandingtrack < handle
         
         % parameters in Landing Disc Frame (LDF)
         state_LDF = filteredState_BlindLandingtrack.empty; % N_excerpts by 1 vector
-        raw_LDF = rawState_BlindLandingtrack.empty; % N_excerpts by 1 vector
-               
+        
         % To store parameters extracted using GUIDE
         DataGUI = DataGUI_BlindTracks.empty; % N_excerpts by 1 vector
   
@@ -113,54 +103,12 @@ classdef BlindLandingtrack < handle
             for ct=1:length(obj.rawTrack)
                 obj.state(end+1) = obj.filterTrack(obj.rawTrack(ct), num, den);
             end
-            
-        end
-        function filterRawTracks_2(obj, fc) % Not being used
-            fs = 1/obj.dt; % fs is 174.8355 Hz
-            [num, den] = butter(2, fc/(fs/2),'low'); % 2nd order Butterworth filter %XXXX CHECK ORDER OF THE FILTER
-      
-            obj.state = filteredState_BlindLandingtrack.empty;
-            toDelete = false(length(obj.rawTrack),1);
-            for ct=1:length(obj.rawTrack)
-                % For the tracks that has more than 10 time points gap, store
-                % only the part that covers maximum delta y in between and
-                % has at least 20 timepoints in the interval
-                % 
-                currentTrack = obj.rawTrack(ct);
-                indices = find(diff(currentTrack.rawState(:,3))>10*obj.dt); % because we can't filter if the gap is more than 10 time points
-                
-                if ~isempty(indices)
-                    indices1 = [0 indices];
-                    indices2 = [indices1(2:end) size(currentTrack.rawState,1)];
-
-                    yTravelled = arrayfun(@(i,j) abs(max(currentTrack.rawState(i:j,5))-min(currentTrack.rawState(i:j,5))), indices1+1, indices2);
-                    nPoints = indices2-indices1;
-                    dummy = sortrows([yTravelled' nPoints' indices1' indices2'], [-1 -2]);
-                    indx = find(dummy(:,2)>20,1); % picking first interval in dummy that has at least 20 points in between them
-
-                    if ~isempty(indx)
-                        % % % save the state after filtering
-                        % create rawState_BlindLandingtrack from the selected interval 
-                        instance = currentTrack.createNewInstanceFromSubset(dummy(indx,3)+1,dummy(indx,4));
-                        obj.state(end+1) = obj.filterTrack(instance, num, den);
-                    else
-                        % track becomes smaller than 20 time points after
-                        % removal of time gaps, therefore delete it.
-                        toDelete(ct) = true;
-                    end
-                else
-                    % % % save the state after filtering
-                    obj.state(end+1) = obj.filterTrack(obj.rawTrack(ct), num, den);
-                end
-                
-            end
-            obj.rawTrack(toDelete) = [];
         end
         
         function removeDuplicateTracks(obj)
             % This function removes the duplicates of a raw track that
             % might come from the same object oscillating around point of
-            % reference (e.g., y = 0.10m plane)
+            % reference (e.g., y = 0.24m plane)
             
             isDuplicate = false(length(obj.rawTrack),1);
             for ct=1:length(obj.rawTrack)-1
@@ -168,12 +116,7 @@ classdef BlindLandingtrack < handle
                 for ct1=ct+1:length(obj.rawTrack)
                     if ~isDuplicate(ct1)
                         duplicate = intersect(currentTrack.rawState, obj.rawTrack(ct1).rawState, 'rows');
-                        if size(duplicate,1)/size(currentTrack.rawState,1) > 0.8
-                            isDuplicate(ct) = true;
-                            break;
-                        elseif size(duplicate,1)/size(obj.rawTrack(ct1).rawState,1) > 0.8
-                            isDuplicate(ct1) = true; 
-                        elseif size(duplicate,1)/size(currentTrack.rawState,1) > 0.4 && ...
+                        if size(duplicate,1)/size(currentTrack.rawState,1) > 0.4 && ...
                            size(duplicate,1)/size(obj.rawTrack(ct1).rawState,1) > 0.4 
                             isDuplicate(ct1) = true;                            
                         end
@@ -226,145 +169,6 @@ classdef BlindLandingtrack < handle
             end
             
         end
-        
-        function compute_rawData_in_LDF(obj, landingDiscs)
-            % Computes rawData in a inertial reference frame attached to the
-            % center of the landing disc
-            
-            % landingDisc - array of instances of LandingDisc class
-            
-            obj.raw_LDF = rawState_BlindLandingtrack.empty;
-            for ct=1:length(obj.rawTrack)
-                landing_side = obj.rawTrack(ct).landingSide;
-                landing_disc = landingDiscs(strcmpi({landingDiscs.side}, landing_side));
-                
-%                 assert(length(landing_disc) == 1, 'Object is landing at multiple discs! Not possible...');
-                
-                stateLDF = BlindLandingtrack.convert_to_landing_disc_reference_frame2(obj.rawTrack(ct).rawState(:,3:9), landing_disc.center', landing_side);
-                obj.raw_LDF(end+1) = rawState_BlindLandingtrack([obj.rawTrack(ct).rawState(:,1:2) stateLDF obj.rawTrack(ct).rawState(:,10:end)], landing_side);
-            end
-            
-        end
-        
-        function plotHandles = plotDataLDF_Time_rawVSfiltered(obj, ct_excerpt, subplotHandles)
-            % Plot optical flow parameters (V, y, r with time)
-            % These parameters are plotted with time
-            
-            % ct_excerpt - ct whose raw and filtered plots are required
-            % subplotHandles - array of axes handles to plot data in
-           
-
-            filtered = obj.state_LDF(ct_excerpt).filteredState;
-            raw = obj.raw_LDF(ct_excerpt).rawState;
-            t0 = filtered(end,1);
-            
-            if isempty(subplotHandles)
-                opticalExpansionPlot = figure;
-                figure(opticalExpansionPlot);
-                
-                subplotHandles(1) = subplot(3,1,1); hold on;
-                plot(filtered(:,1)-t0, filtered(:,6),'b.','MarkerSize',10);
-                plot(raw(:,3)-t0, raw(:,8),'r.','MarkerSize',10);
-                ylabel('V_{gy} (m/s)', 'FontSize', 15);
-                legend({'filtered','raw'},'Location','best');
-                set(gca, 'FontSize', 15); grid on;
-%                 ylim([-8 2]);
-
-                subplotHandles(2) = subplot(3,1,2); hold on;
-                plot(filtered(:,1)-t0,...
-                    filtered(:,3),'b.','MarkerSize',10);
-                plot(raw(:,3)-t0, raw(:,5),'r.','MarkerSize',10);
-                ylabel('y (m)', 'FontSize', 15);
-    %             xlabel('Time (s)', 'FontSize', 15);
-                set(gca, 'FontSize', 15); grid on;
-
-                subplotHandles(3) = subplot(3,1,3); hold on;
-                plot(filtered(:,1)-t0,...
-                    filtered(:,6)./filtered(:,3),'b.','MarkerSize',10);
-                plot(raw(:,3)-t0, raw(:,8)./raw(:,5),'r.','MarkerSize',10);
-                ylabel('r (1/s)', 'FontSize', 15);
-                xlabel('Time (s)', 'FontSize', 15);
-                set(gca, 'FontSize', 15); grid on;
-                
-                plotHandles = opticalExpansionPlot;
-                
-            else
-                
-                assert(length(subplotHandles) == 3, 'Three axes handles are needed to plot the data');
-                
-%                 set(0,'CurrentFigure',subplotHandles(1).Parent);
-%                 axes(subplotHandles(1));
-                plot(filtered(:,1)-t0, filtered(:,6),'b.','MarkerSize',10, 'Parent', subplotHandles(1));
-                plot(raw(:,3)-t0, raw(:,8),'r.','MarkerSize',10, 'Parent', subplotHandles(1));
-                legend(subplotHandles(1),{'filtered','raw'},'Location','best');
-%                 ylim([-8 2]);
-                
-%                 axes(subplotHandles(2));
-                plot(filtered(:,1)-t0, filtered(:,3),'b.','MarkerSize',10, 'Parent', subplotHandles(2));
-                plot(raw(:,3)-t0, raw(:,5),'r.','MarkerSize',10, 'Parent', subplotHandles(2));
-%                 ylim([-60 60]);
-                
-%                 axes(subplotHandles(3));
-                plot(filtered(:,1)-t0, filtered(:,6)./filtered(:,3),'b.','MarkerSize',10, 'Parent', subplotHandles(3));
-                plot(raw(:,3)-t0, raw(:,8)./raw(:,5),'r.','MarkerSize',10, 'Parent', subplotHandles(3));
-                
-                plotHandles = [];
-            end
-        end
-        
-        
-        function plotHandles = plotDataLDF_Distance_rawVSfiltered(obj, ct_excerpt, subplotHandles)
-            % Plot optical flow parameters (V and r with y)
-            % These parameters are plotted with distance from the platform
-            
-            % ct_excerpt - ct whose raw and filtered plots are required
-            % subplotHandles - array of axes handles to plot data in
-            
-%             str = '#375E98';
-%             color = sscanf(str(2:end),'%2x%2x%2x',[1 3])/255;
-            assert(length(obj.state) == length(obj.rawTrack));
-            
-            filtered = obj.state_LDF(ct_excerpt).filteredState;
-            raw = obj.raw_LDF(ct_excerpt).rawState;
-            
-            
-            if isempty(subplotHandles)
-                opticalExpansionPlot = figure;
-                figure(opticalExpansionPlot);
-                subplot(2,1,1); hold on;
-                plot(filtered(:,3), filtered(:,6),'b.','MarkerSize',10);
-                plot(raw(:,5), raw(:,8),'r.','MarkerSize',10);
-                ylabel('V_{gy} (m/s)', 'FontSize', 15);
-                legend({'filtered','raw'},'Location','best');
-                set(gca, 'FontSize', 15); grid on;
-
-                subplot(2,1,2); hold on;
-                plot(filtered(:,3), filtered(:,6)./filtered(:,3),'b.','MarkerSize',10);
-                plot(raw(:,5), raw(:,8)./raw(:,5),'b.','MarkerSize',10);
-                ylabel('r (1/s)', 'FontSize', 15);
-                xlabel('y (m)', 'FontSize', 15);
-                set(gca, 'FontSize', 15); grid on;
-%                 ylim([-8 2]);
-                
-                set(gca, 'FontSize', 15); grid on;
-                
-                plotHandles = opticalExpansionPlot;
-                
-            else
-                assert(length(subplotHandles) == 2, 'Two axes handles are needed to plot the data');
-%                 axes(subplotHandles(1));
-                plot(filtered(:,3), filtered(:,6),'b.','MarkerSize',10, 'Parent', subplotHandles(1));
-                plot(raw(:,5), raw(:,8),'r.','MarkerSize',10, 'Parent', subplotHandles(1));
-                legend(subplotHandles(1),{'filtered','raw'},'Location','best');
-                                
-%                 axes(subplotHandles(2));
-                plot(filtered(:,3), filtered(:,6)./filtered(:,3),'b.','MarkerSize',10, 'Parent', subplotHandles(2));
-                plot(raw(:,5), raw(:,8)./raw(:,5),'r.','MarkerSize',10, 'Parent', subplotHandles(2));
-
-                plotHandles = [];
-            end
-        end
-        
         
         function plotHandles = plotData(obj)
             if length(obj.rawTrack)~=length(obj.state) % if filtered data doesn't exist, filter it first
@@ -949,7 +753,7 @@ classdef BlindLandingtrack < handle
     
     methods(Static)
         function state_LDF = convert_to_landing_disc_reference_frame1(state, origin, landing_side)
-            % state - N X 10 (or N X 7 in case of rawData) matrix similar to Landingtrack.state
+            % state - N X 10 matrix similar to Landingtrack.state
             % origin - 1 X 3 vector containing origin of the landing
             % disc reference frame
             % landing_side - 'Hive' or 'Feeder'
@@ -1012,11 +816,7 @@ classdef BlindLandingtrack < handle
                 
                 state_LDF = state;
                 state_LDF(:,2:4) = state(:,2:4) - origin;
-                if size(state,2) <= 7
-                    state_LDF(:, [3 6]) = -state_LDF(:, [3 6]);
-                else
-                    state_LDF(:, [3 6 9]) = -state_LDF(:, [3 6 9]);
-                end
+                state_LDF(:, [3 6 9]) = -state_LDF(:, [3 6 9]);
                 
             else
                 error('Unknown landing disc found :/. How is that possible? MAGIC??');
@@ -1218,7 +1018,7 @@ classdef BlindLandingtrack < handle
                 subplotHandles(3) = subplot(3,1,3); hold on;
 %                 plot(state_subset(:,1)-t0, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
                 plot(state_subset(:,1)-tend, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
-                ylabel('r (1/s)', 'FontSize', 16);
+                ylabel('r (rad/s)', 'FontSize', 16);
                 xlabel('time (s)', 'FontSize', 16);
                 set(gca, 'FontSize', 15); grid on;
 
@@ -1266,6 +1066,55 @@ classdef BlindLandingtrack < handle
 
                 plotHandles = [opticalExpansionPlot];
                 linkaxes(subplotHandles(1:3),'x');
+            end
+        end
+        
+        function plotHandles = plotDataLDF_Time3_forArticle(state_LDF, t_start)
+            % Plot optical flow parameters
+            % These parameters are plotted with time
+            
+            % state_LDF - instance of filteredState_BlindLandingTrack
+            % t_start - 
+           
+
+            filteredState = state_LDF.filteredState;
+            state_subset = filteredState; % filteredState(filteredState(:,1)-filteredState(end,1)>=-1.3,:);
+            t0 = filteredState(find(filteredState(:,1)>t_start,1),1);
+            tend = filteredState(end,1);
+            
+            if nargin == 2
+                opticalExpansionPlot = figure;
+                figure(opticalExpansionPlot);
+                
+                subplotHandles(1) = subplot(4,1,1); hold on;
+%                 plot(state_subset(:,1)-t0, -1*state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                plot(state_subset(:,1)-tend, -1*state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('y (m)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+                
+                subplotHandles(2) = subplot(4,1,2); hold on;
+%                 plot(state_subset(:,1)-t0, state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                plot(state_subset(:,1)-tend, state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('V (m/s)', 'FontSize', 16);
+    %             ylabel('Optical rate of expansion (1/s)', 'FontSize', 15);
+                set(gca, 'FontSize', 15); grid on;
+                
+                subplotHandles(3) = subplot(4,1,3); hold on;
+%                 plot(state_subset(:,1)-t0, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                plot(state_subset(:,1)-tend, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('r (rad/s)', 'FontSize', 16);
+                xlabel('time (s)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+
+                subplotHandles(4) = subplot(4,1,4); hold on;
+                plot(state_subset(:,1)-tend, state_subset(:,9),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('a (m/s^2)', 'FontSize', 16);
+                xlabel('time (s)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+                
+                
+                plotHandles = [opticalExpansionPlot];
+                linkaxes(subplotHandles(1:4),'x');
             end
         end
         
@@ -1329,8 +1178,6 @@ classdef BlindLandingtrack < handle
                 plotHandles = [];
             end
         end
-        
-        
         
         function plotHandles = plotDataLDF_abyV(state_LDF, figureHandles)
             % Plot optical flow parameters
@@ -1432,134 +1279,6 @@ classdef BlindLandingtrack < handle
                 plotHandles = [];
             end
         end
-        
-        function [datenum, pattern, patternnum, beeID, setID, flightID] = extractInfo(basedir, filename)
-            % Function to extract info from the filename in basedir for
-            % honeybee data. This code is written based on the readme files
-            % in honeybee data folders.
-            if strcmpi(basedir, 'Big and Small spiral')
-                day_of_exp = datetime(filename(1:6), 'InputFormat', 'ddMMyy');
-                datenum = str2num(datestr(day_of_exp, 'yyyymmdd'));
-                
-                if strcmpi(filename(12:13),'bs')
-                    pattern = 'Big static spiral';
-                    patternnum = 1;
-                elseif strcmpi(filename(12:13),'ss')
-                    pattern = 'Small static spiral';
-                    patternnum = 2;
-                else
-                    warning('Unknown Pattern encountered');
-                    keyboard;
-                end
-                
-                setID = str2num(filename(15));
-                
-                flightID = str2num(filename(17:18));
-                
-                beeID = filename(20:21);
-                
-            elseif strcmpi(basedir, 'Check') || strcmpi(basedir, 'Grey pattern') || strcmpi(basedir, 'Sector pattern')
-                
-                if strcmpi(filename(1:2),'ch')
-                    pattern = 'Checkerboard';
-                    patternnum = 3;
-                    datenum = 99999999;
-                elseif strcmpi(filename(1:2),'gs')
-                    pattern = 'Grey pattern';
-                    patternnum = 4;
-                    datenum = 99999999;
-                elseif strcmpi(filename(1:2),'ss')
-                    pattern = 'Spoke pattern';
-                    patternnum = 11;
-                    datenum = 99999999;
-                else
-                    warning('Unknown Pattern encountered');
-                    keyboard;
-                end
-                
-                split_filename = split(filename, ' ');
-                
-                setID = str2num(split_filename{2});
-                
-                flightID = str2num(split_filename{3});
-                
-                beeID = split_filename{4}(1:2);
-                
-            elseif strcmpi(basedir, 'Horizontal stripes') || strcmpi(basedir, 'Random Julesz pattern') ...
-                    || strcmpi(basedir, 'Vertical stripes')
-                day_of_exp = datetime(filename(1:6), 'InputFormat', 'ddMMyy');
-                datenum = str2num(datestr(day_of_exp, 'yyyymmdd'));
-                
-                if strcmpi(basedir, 'Horizontal stripes')
-                    pattern = 'Horizontal stripes';
-                    patternnum = 5;
-                elseif strcmpi(basedir, 'Random Julesz pattern')
-                    pattern = 'Random Julesz';
-                    patternnum = 6;
-                elseif strcmpi(basedir, 'Vertical stripes')
-                    pattern = 'Vertical stripes';
-                    patternnum = 10;
-                else
-                    warning('Unknown Pattern encountered');
-                    keyboard;
-                end
-                    
-                split_filename = split(filename, ' ');
-                
-                setID = str2num(split_filename{2});
-                
-                flightID = str2num(split_filename{3});
-                
-                beeID = split_filename{4}(1:2);
-                
-            elseif strcmpi(basedir, 'Variation in number of spiral arms')
-                datenum = 99999999;
-                
-                if strcmpi(filename(1:2), 'S3')
-                    pattern = 'Static 3-arm spiral';
-                    patternnum = 7;
-                elseif strcmpi(filename(1:2), 'S4')
-                    pattern = 'Static 4-arm spiral';
-                    patternnum = 8;
-                elseif strcmpi(filename(1:2), 'S6')
-                    pattern = 'Static 6-arm spiral';
-                    patternnum = 9;
-                elseif strcmpi(filename(1:2), 'E3')
-                    pattern = 'Expanding 3-arm spiral';
-                    patternnum = 12;
-                elseif strcmpi(filename(1:2), 'E4')
-                    pattern = 'Expanding 4-arm spiral';
-                    patternnum = 13;
-                elseif strcmpi(filename(1:2), 'E6')
-                    pattern = 'Expanding 6-arm spiral';
-                    patternnum = 14;
-                elseif strcmpi(filename(1:2), 'C3')
-                    pattern = 'Contracting 3-arm spiral';
-                    patternnum = 15;
-                elseif strcmpi(filename(1:2), 'C4')
-                    pattern = 'Contracting 4-arm spiral';
-                    patternnum = 16;
-                elseif strcmpi(filename(1:2), 'C6')
-                    pattern = 'Contracting 6-arm spiral';
-                    patternnum = 17;
-                else
-                    warning('Unknown Pattern encountered');
-                    keyboard;
-                end
-                
-                setID = str2num(filename(3));
-                
-                split_filename = split(filename, '_');
-                flightID = str2num(split_filename{2}(2:end));
-                
-                beeID = '99';
-            else
-                warning('Unknown directory encountered');
-                keyboard;
-            end 
-        end
-        
-        
-        
+            
     end
 end

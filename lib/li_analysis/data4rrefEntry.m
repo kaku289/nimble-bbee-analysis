@@ -20,11 +20,12 @@ classdef data4rrefEntry < handle
         fd_actual_ti; % actual flight duration
         
         %%%%% Parameters for statistical analysis %%%%%
-        day; % day of the experiment
-        time; % time during the day (measured in blocks)
-        pattern; % 1 (checkerboard) or 2 (spokes)
-        light; % 1 (low), 2 (medium), 3 (high)
-        side; % 1 (hive), 2 (food source)
+        day = ''; % date on which the track was obtained
+        pattern = '';
+        patternnum;
+        setID;
+        beeID;
+        flightID;
         
     end
      methods

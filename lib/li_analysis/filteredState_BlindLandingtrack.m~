@@ -1214,19 +1214,14 @@ classdef filteredState_BlindLandingtrack < handle
             %     xticks(p1.XLim(1):0.1:0);
             
             p3 = subplot(4,1,3); hold on;
-            plot(-complete_state(:,3),complete_state(:,5)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
-            ylim([-3 3]);
-            ylabel('Horizontal flow', 'FontSize', 16);
+            
+
             set(gca, 'FontSize', 16); %grid on;
             
-            p4 = subplot(4,1,4); hold on;
-            plot(-complete_state(:,3),complete_state(:,7)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
-            ylim([-3 3]);
-            ylabel('Vertical flow', 'FontSize', 16);
-            xlabel('y (m)', 'FontSize', 16);
-            set(gca, 'FontSize', 16);
             
-            linkaxes([p1, p2, p3, p4],'x');
+            
+            
+            linkaxes([p1, p2],'x');
             if abs(floor((min(data4rref(:,3))/0.05))*0.05 - min(data4rref(:,3))) > 0.025
                 xmin = floor((min(data4rref(:,3))/0.05))*0.05;
             else

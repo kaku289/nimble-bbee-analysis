@@ -212,10 +212,9 @@ plot(track.rawTrack(handles.trackExcerpt).rawState(:,5),track.rawTrack(handles.t
 
 linkaxes([handles.axes1, handles.axes2, handles.axes3],'x');
 
-% xlim(handles.axes2, [min(state_subset(:,3))-0.01 0]);
-ylim(handles.axes2, [-10 1]);
+xlim(handles.axes2, [min(state_subset(:,3))-0.01 0]);
+ylim(handles.axes2, [-11 2]);
 ylim(handles.axes3, [-40 40]);
-ylim(handles.axes4, [-1 3]);
 
 setAxes(hObject, handles);
 

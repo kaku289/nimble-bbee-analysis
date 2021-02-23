@@ -32,13 +32,12 @@ classdef data4rrefEstimate < handle
 %         const_rvst_td ; % N by 1
         
         %%%%% Parameters for statistical analysis %%%%%
-        day; % day of the experiment
-        time; % time during the day (measured in blocks)
-        pattern; % 1 (checkerboard) or 2 (spokes)
-        light; % 1 (low), 2 (medium), 3 (high)
-        side; % 1 (hive), 2 (food source)
-        wind; % 1 to 6
-
+        day; % date on which the track was obtained
+        pattern;
+        patternnum;
+        setID;
+        beeID;
+        flightID;
         
         % state for rref estimation - for legacy code
         state4rrefEstimate = []; % NX10 vector - the whole shebang [time x y z vx vy vz ax ay az]

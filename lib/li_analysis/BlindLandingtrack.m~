@@ -1533,15 +1533,15 @@ classdef BlindLandingtrack < handle
                 elseif strcmpi(filename(1:2), 'E6')
                     pattern = 'Expanding 6-arm spiral';
                     patternnum = 14;
-                elseif strcmpi(filename(1:2), 'C3')
-                    pattern = 'Contracting 3-arm spiral';
+                elseif strcmpi(filename(1:2), 'E3')
+                    pattern = 'Expanding 3-arm spiral';
                     patternnum = 15;
-                elseif strcmpi(filename(1:2), 'C4')
-                    pattern = 'Contracting 4-arm spiral';
-                    patternnum = 16;
-                elseif strcmpi(filename(1:2), 'C6')
-                    pattern = 'Contracting 6-arm spiral';
-                    patternnum = 17;
+                elseif strcmpi(filename(1:2), 'E4')
+                    pattern = 'Expanding 4-arm spiral';
+                    patternnum = 13;
+                elseif strcmpi(filename(1:2), 'E6')
+                    pattern = 'Expanding 6-arm spiral';
+                    patternnum = 14;
                 else
                     warning('Unknown Pattern encountered');
                     keyboard;
