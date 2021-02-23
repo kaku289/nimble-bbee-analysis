@@ -1,4 +1,4 @@
-%% This file performs a "dirty" analysis on preliminary data sent by Dr. Baird for honeybee approaches
+%% This file performs analysis on preliminary data sent by Dr. Baird for honeybee approaches
 
 %% Load data
 clc; close all;

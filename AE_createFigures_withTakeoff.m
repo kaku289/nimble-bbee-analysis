@@ -160,12 +160,10 @@ clc; close all;
 % clear;
 % 
 % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_videos.mat';
-inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_videos.mat';
 % load(inputFile);
 treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
-% DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_with_videos';
-DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_with_videos';
+DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_with_videos';
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
 savePlots = false;
 savePDFs = false;
@@ -312,69 +310,17 @@ end
 
 % Find video for a particular track
 for ct=1:length(data4video)
-    if ~isempty(data4video(ct).videoInfo) && data4video(ct).treatment.datenum == 20190702 ...
-            && data4video(ct).treatment.startTime == 123000 && data4video(ct).landingTrack.obj_id == 2119
+    if ~isempty(data4video(ct).videoInfo) && data4video(ct).treatment.datenum == 20190704 ...
+            && data4video(ct).treatment.startTime == 110000 && data4video(ct).landingTrack.obj_id == 3481
         keyboard;
         data4video(ct).videoInfo
         track = data4video(ct).landingTrack;
         disp([num2str(track.datenum) '_' track.foldername(10:15) '_obj' num2str(track.obj_id) ]);
-        disp(ct);
+%         disp(ct);
     else
 %         disp('empty');
     end
-end 
-
-%%%% Create plot with time from a t_start %%%%%%
-% Finding time instant for max y
-[~,indx] = min(track.state_LDF.filteredState(:,3));
-% t_start = interp1(track.state_LDF.filteredState(:,3),track.state_LDF.filteredState(:,1),-0.25);
-t_start = track.state_LDF.filteredState(indx,1);
-t_end = track.state_LDF.filteredState(end,1);
-
-% Plotting variables with time (4 by 1)
-plotHandle = track.plotDataLDF_Time3_forArticle(track.state_LDF, t_start);
-figure(plotHandle);
-subplot(4,1,1); grid off
-ylim([0 0.4]);
-yticks([0:0.2:0.4]);
-subplot(4,1,2); grid off
-ylim([-0.2 0.4]);
-yticks([-0.2:0.2:0.4]);
-yline(0,'--');
-subplot(4,1,4); grid off
-ylim([0 3]);
-yticks([0:1:3]);
-subplot(4,1,3); grid off
-ylim([-3 3]);
-yticks([-3:3:3]);
-yline(0,'--');
-% xlim([0 Inf]);
-xlim([t_start-t_end 0]);
-
-% Plotting variables with Distance (2 by 1)
-plotHandle = track.plotDataLDF_Distance3_forArticle(track.state_LDF, t_start);
-subplot(2,1,1); grid off
-ylim([0 0.3]);
-yticks([0:0.1:0.3]);
-subplot(2,1,2); grid off
-ylim([0 3]);
-yticks([0:1:3]);
-
-% Save images for photomontage
-ct_selected = 297; % 20190702_123002_obj2119
-if isunix
-    [videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '85.fmf')));
-elseif ispc
-    [videodata, timestamps] = fmf_read(fullfile(strrep(data4video(ct_selected).videoInfo.folder,'/media/reken001/Disk_08_backup','D:'), data4video(ct_selected).videoInfo.name));
-end
-images = videodata(:,:,t_start <= timestamps & timestamps <= t_end); % Extract and save frames between t_start and t_end
-Directory = 'C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A1\Figures\2';
-filename = fullfile(Directory, strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '84'));
-% rmdir(filename);
-mkdir(filename);
-for i=1:15:size(images,3)
-    imwrite(images(:,:,i), fullfile(filename, [num2str(i,'%03.f') '.png']));
-end
+end  
 
 % Selected track for video
 % fac_1.00_20190704_110000_123000_obj1443_track52_excerpt1
@@ -386,11 +332,7 @@ stateLDF = data4video(ct_selected).state_LDF;
 
 % load movie data
 % [videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, data4video(ct_selected).videoInfo.name));
-if isunix
-    [videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '85.fmf')));
-elseif ispc
-    [videodata, timestamps] = fmf_read(fullfile(strrep(data4video(ct_selected).videoInfo.folder,'/media/reken001/Disk_08_backup','D:'), strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '85.fmf')));
-end
+[videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '85.fmf')));
 t_start = data4video(ct_selected).state_LDF.filteredState(1,1);
 t_end = data4video(ct_selected).state_LDF.filteredState(end,1);
 intervals_ti = stateLDF.rrefSegments(abs([stateLDF.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti;
@@ -419,6 +361,7 @@ for ct=1:size(intervals_ti,1)
         writeVideo(v,images(:,:,i));
     end
     close(v);
+    
 end
 
 [~, start_frame] = min(abs(stateLDF.filteredState(1,1)-timestamps));
@@ -452,7 +395,7 @@ chosen_fac = 1;
 
 data = struct.empty;
 % tracks_fac(length(pattern), length(light)) = filteredState_BlindLandingtrack.empty; % tracks for chosen factor
-clear dummy;
+clear dummy N N_fromTakeoff N_fromFreeflight N_stateLDFs;
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
@@ -484,6 +427,11 @@ for ct_pattern = 1:length(pattern)
             state_LDF = [landingTracks.state_LDF];
             rrefSegs = [state_LDF.rrefSegments];
             
+            treatment_indx4landingTracks = arrayfun(@(x) x*ones(length(relevantTreatments(x).landingTracks),1),1:length(relevantTreatments), 'UniformOutput', false);
+            treatment_indx4landingTracks = vertcat(treatment_indx4landingTracks{:});
+            treatment_indx4stateLDF = arrayfun(@(x) treatment_indx4landingTracks(x)*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+            treatment_indx4stateLDF = vertcat(treatment_indx4stateLDF{:});
+            
             landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
             landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
             
@@ -494,15 +442,24 @@ for ct_pattern = 1:length(pattern)
             
             % Finding # of "tracks" (state LDFs) that contain rref segments
             % for each factor
-            N = zeros(1, length(factors));
+            N{ct_light,ct_pattern} = zeros(1, length(factors));
+            landingDiscs = {relevantTreatments(treatment_indx4stateLDF).landingDiscs};
+            hastakeoff = arrayfun(@(x) state_LDF(x).hasTakeoff(landingDiscs{x}),1:length(state_LDF));
+            N_stateLDFs{ct_light,ct_pattern} = [length(state_LDF), sum(hastakeoff), sum(~hastakeoff)];
+            N_fromTakeoff{ct_light,ct_pattern} = zeros(1, length(factors));
+            N_fromFreeflight{ct_light,ct_pattern} = zeros(1, length(factors));
             for ct_fac = 1:length(factors)
                 factor = factors(ct_fac);
                 indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).intervals_ti),state_LDF);
-                N(ct_fac) = sum(indices);
+                N{ct_light,ct_pattern}(ct_fac) = sum(indices);
+                N_fromTakeoff{ct_light,ct_pattern}(ct_fac) = sum(indices & hastakeoff);
+                N_fromFreeflight{ct_light,ct_pattern}(ct_fac) = sum(indices & ~hastakeoff);
             end
             
             % Display 
-            disp(['# of state LDFs containing rrefs for different factors: ' num2str(N)]);
+            disp(['# of state LDFs containing rrefs for different factors: ' num2str(N{ct_light,ct_pattern})]);
+            disp(['# of state LDFs containing rrefs for different factors from Takeoff: ' num2str(N_fromTakeoff{ct_light,ct_pattern})]);
+            disp(['# of state LDFs containing rrefs for different factors from Freeflight: ' num2str(N_fromFreeflight{ct_light,ct_pattern})]);
             
             % For chosen factor, collect all tracks that do contain
             % non-empty rref segments
@@ -511,6 +468,11 @@ for ct_pattern = 1:length(pattern)
             dummy.ct_pattern = ct_pattern;
             dummy.ct_light = ct_light;
             dummy.landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+            treatment_indx4stateLDF = treatment_indx4stateLDF(indices);
+%             dummy.landingDiscs = {relevantTreatments(treatment_indx4stateLDF).landingDiscs};
+            
+            dummy.hastakeoff = hastakeoff(indices); %arrayfun(@(x) dummy.tracks_fac(x).hasTakeoff(dummy.landingDiscs{x}),1:length(dummy.tracks_fac));
+            
             data = [data; dummy];
             
             
@@ -539,6 +501,24 @@ for ct_pattern = 1:length(pattern)
         end
     end
 end
+
+%% Look for data froma particular track
+for ct=1:length(data)
+        if data(ct).ct_pattern == 2 && data(ct).ct_light == 3
+%             indxs = find([data(ct).landingTrack.datenum] == 20190702 ...
+%                     &   [data(ct).landingTrack.obj_id] == 2119);
+%             indxs = find([data(ct).landingTrack.datenum] == 20190628 ...
+%                     &   [data(ct).landingTrack.obj_id] == 8977);
+%             indxs = find([data(ct).landingTrack.datenum] == 20190702 ...
+%                     &   [data(ct).landingTrack.obj_id] == 402);
+            indxs = find([data(ct).landingTrack.datenum] == 20190702 ...
+                    &   [data(ct).landingTrack.obj_id] == 5212);
+            data(ct).landingTrack(indxs).foldername
+            data(ct).hastakeoff(indxs)
+        else
+            continue
+        end
+end 
 
 
 %% Create panels a and b for Figure 3 - Trajectories' views
@@ -701,11 +681,15 @@ end
 close all; clc;
 
 dy = cell(length(data),1); % y travelled during rrefs
+dy_takeoff = cell(length(data),1);
+dy_freeflight = cell(length(data),1);
 dY = cell(length(data),1); % total y travelled within a track
 dY_samesizeas_dy = cell(length(data),1);
 
 % for tracks containing 2 rrefs
-dy_mr = cell(length(data),1); % total y travelled during rrefs
+dy_mr = cell(length(data),1); % total y travelled during rrefs (starting from one rref until the end of second rref)
+dy_mr_takeoff = cell(length(data),1);
+dy_mr_freeflight = cell(length(data),1);
 dY_mr = cell(length(data),1); % total y travelled within a track
 
 dt_mr_actual = cell(length(data),1); % actual time between start of first and end of second rref segment
@@ -720,7 +704,7 @@ has_hover_3dspeed = cell(length(data),1); % if there is a hover transition (V<0.
 
 % for constant tau-dot strategy
 tau_dot1 = cell(length(data),1); % tau-dot at the beginning of the first r* segment
-taudot = -0.812; % average in our complete dataset
+taudot = -0.87; % average in our complete dataset
 Vmean_const_taudot = cell(length(data),1); % mean speed had the bbees underwent constant-taudot strategy
 
 for ct=1:length(data)
@@ -744,6 +728,8 @@ for ct=1:length(data)
     
     dt{ct} = vertcat(dt_rref{:});
     dy{ct} = vertcat(yTravelled{:});
+    dy_takeoff{ct} = vertcat(yTravelled{data(ct).hastakeoff});
+    dy_freeflight{ct} = vertcat(yTravelled{~data(ct).hastakeoff});
     
     dummy = arrayfun(@(x) dT{ct}(x)*ones(length(dt_rref{x}),1),1:length(dT{ct}),'UniformOutput', false);
     dT_samesizeas_dt{ct} = vertcat(dummy{:});
@@ -755,7 +741,7 @@ for ct=1:length(data)
     has_two_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)==2,data(ct).tracks_fac);
     N = sum(has_two_rrefs);
     data_ss = data(ct).tracks_fac(has_two_rrefs);
-    
+    hastakeoff_ss = data(ct).hastakeoff(has_two_rrefs);
     for ct1=1:length(data_ss)
         indxs = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti([1 end]);
         assert(length(indxs)==2);
@@ -806,7 +792,8 @@ for ct=1:length(data)
         end
         disp([dt_mr_actual{ct}(ct1,1) dt_mr_analytical{ct}(ct1,1)])
     end
-    
+    dy_mr_takeoff{ct} = dy_mr{ct}(hastakeoff_ss);
+    dy_mr_freeflight{ct} = dy_mr{ct}(~hastakeoff_ss);
     dY_mr{ct} = dY{ct}(has_two_rrefs);    
 end
 
@@ -903,10 +890,20 @@ mean_dist = vertcat(mean_dist{:})
 std_dist = arrayfun(@(x) [std(vertcat(dy{x})), std(vertcat(dY{x})), std(vertcat(dy{x}))/std(vertcat(dY{x}))], 1:length(dy), 'UniformOutput', false);
 std_dist = vertcat(std_dist{:})
 
+meansd_dist_takeoff = arrayfun(@(x) [mean(vertcat(dy_takeoff{x})), std(vertcat(dy_takeoff{x}))], 1:length(dy_takeoff), 'UniformOutput', false);
+meansd_dist_takeoff = vertcat(meansd_dist_takeoff{:})
+meansd_dist_freeflight = arrayfun(@(x) [mean(vertcat(dy_freeflight{x})), std(vertcat(dy_freeflight{x}))], 1:length(dy_freeflight), 'UniformOutput', false);
+meansd_dist_freeflight = vertcat(meansd_dist_freeflight{:})
+
 mean_dist_mr = arrayfun(@(x) [nanmean(vertcat(dy_mr{x})), nanmean(vertcat(dY_mr{x})), nanmean(vertcat(dy_mr{x}))/mean(vertcat(dY_mr{x}))], 1:length(dy_mr), 'UniformOutput', false);
 mean_dist_mr = vertcat(mean_dist_mr{:})
 std_dist_mr = arrayfun(@(x) [nanstd(vertcat(dy_mr{x})), nanstd(vertcat(dY_mr{x})), nanstd(vertcat(dy_mr{x}))/nanstd(vertcat(dY_mr{x}))], 1:length(dy_mr), 'UniformOutput', false);
 std_dist_mr = vertcat(std_dist_mr{:})
+
+meansd_dist_mr_takeoff = arrayfun(@(x) [nanmean(vertcat(dy_mr_takeoff{x})), nanstd(vertcat(dy_mr_takeoff{x}))], 1:length(dy_mr_takeoff), 'UniformOutput', false);
+meansd_dist_mr_takeoff = vertcat(meansd_dist_mr_takeoff{:})
+meansd_dist_mr_freeflight = arrayfun(@(x) [nanmean(vertcat(dy_mr_freeflight{x})), nanstd(vertcat(dy_mr_freeflight{x}))], 1:length(dy_mr_freeflight), 'UniformOutput', false);
+meansd_dist_mr_freeflight = vertcat(meansd_dist_mr_freeflight{:})
 
 for ct=1:6
 %     disp([num2str(mean_dist_mr(ct,1),'%0.3f') ' [' num2str(std_dist_mr(ct,1),'%0.3f') ']']);
@@ -1063,10 +1060,30 @@ delta_rrref_negjumps = cell(length(data),1); % change in rref between two consec
 ratio_rrref_posjumps = cell(length(data),1); % change in rref between two consecutive rref segments
 ratio_rrref_negjumps = cell(length(data),1); % change in rref between two consecutive rref segments
 
+
+delta_rrref_posjumps_takeoff = cell(length(data),1); % change in rref between two consecutive rref segments
+delta_rrref_negjumps_takeoff = cell(length(data),1); % change in rref between two consecutive rref segments
+
+ratio_rrref_posjumps_takeoff = cell(length(data),1); % change in rref between two consecutive rref segments
+ratio_rrref_negjumps_takeoff = cell(length(data),1); % change in rref between two consecutive rref segments
+
+
+delta_rrref_posjumps_freeflight = cell(length(data),1); % change in rref between two consecutive rref segments
+delta_rrref_negjumps_freeflight = cell(length(data),1); % change in rref between two consecutive rref segments
+
+ratio_rrref_posjumps_freeflight = cell(length(data),1); % change in rref between two consecutive rref segments
+ratio_rrref_negjumps_freeflight = cell(length(data),1); % change in rref between two consecutive rref segments
+
 data_ymean = {}; data_rmean = {};
+clear table_s3 table_s3_takeoff table_s3_freeflight;
 for ct=1:length(data)
     disp([pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]);
+    has_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti),data(ct).tracks_fac);
+    disp('***********************************************************');
+    disp(['# of r* segments for chosen factor: ' num2str(sum(has_rrefs))]);
+    
     has_multiple_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)>1,data(ct).tracks_fac);
+    has_takeoff = data(ct).hastakeoff(has_multiple_rrefs);
     
     N = sum(has_multiple_rrefs);
     data_ss = data(ct).tracks_fac(has_multiple_rrefs);
@@ -1084,7 +1101,7 @@ for ct=1:length(data)
     jumps = cell(size(ymean));
     jump_ratios = cell(size(ymean));
     disp(['# of tracks with >1 r* segments for chosen factor: ' num2str(N)]);
-    plotHandle = figure; hold on;
+%     plotHandle = figure; hold on;
     for ct1=1:N
         
 %         figure(plotHandle);
@@ -1103,20 +1120,20 @@ for ct=1:length(data)
         % Plot straight line
 % % %         plot(-[ymean{ct1}], -[rmean{ct1}] ...
 % % %         ,'Color', [225 225 225]./255/2,'LineWidth',1);
-        if rem(ct1,10) == 1
-            plot(-[ymean{ct1}], -[rmean{ct1}] ...
-            ,'Color', [225 225 225]./255/2,'LineWidth',1);
-        end
+%         if rem(ct1,10) == 1
+%             plot(-[ymean{ct1}], -[rmean{ct1}] ...
+%             ,'Color', [225 225 225]./255/2,'LineWidth',1);
+%         end
     
         
         % Highlight data points
 % % %         scatter(-[ymean{ct1}], -[rmean{ct1}],5,...
 % % %         'k','filled','o');
 % %         
-        color_indx = 1:1:length(ymean{ct1});
-        color_indx(color_indx > 3) = 3;
-        scatter(-[ymean{ct1}], -[rmean{ct1}],10,...
-        cmap(color_indx,:),'filled','o');
+%         color_indx = 1:1:length(ymean{ct1});
+%         color_indx(color_indx > 3) = 3;
+%         scatter(-[ymean{ct1}], -[rmean{ct1}],10,...
+%         cmap(color_indx,:),'filled','o');
     
 % % %         % Plot only negative jumps
 % % %         if any(jumps{ct1}(:,2)<-2)
@@ -1133,10 +1150,26 @@ for ct=1:length(data)
     delta_rrref_posjumps{ct} = dummy(dummy(:,2)>0,2);
     delta_rrref_negjumps{ct} = dummy(dummy(:,2)<0,2);
     
+    dummy2 = vertcat(jumps{has_takeoff});
+    delta_rrref_posjumps_takeoff{ct} = dummy2(dummy2(:,2)>0,2);
+    delta_rrref_negjumps_takeoff{ct} = dummy2(dummy2(:,2)<0,2);
+    
+    dummy3 = vertcat(jumps{~has_takeoff});
+    delta_rrref_posjumps_freeflight{ct} = dummy3(dummy3(:,2)>0,2);
+    delta_rrref_negjumps_freeflight{ct} = dummy3(dummy3(:,2)<0,2);
+    
     dummy1 = vertcat(jump_ratios{:});
     assert(sum((dummy1>1) == (dummy(:,2)>0)) == length(dummy1))
     ratio_rrref_posjumps{ct} = dummy1(dummy1>1);
     ratio_rrref_negjumps{ct} = dummy1(dummy1<1);
+    
+    dummy4 = vertcat(jump_ratios{has_takeoff});
+    ratio_rrref_posjumps_takeoff{ct} = dummy4(dummy4>1);
+    ratio_rrref_negjumps_takeoff{ct} = dummy4(dummy4<1);
+    
+    dummy5 = vertcat(jump_ratios{~has_takeoff});
+    ratio_rrref_posjumps_freeflight{ct} = dummy5(dummy5>1);
+    ratio_rrref_negjumps_freeflight{ct} = dummy5(dummy5<1);
     
     disp(['# of +ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)>0))]);
     disp(['# of -ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)<0))]);
@@ -1147,13 +1180,59 @@ for ct=1:length(data)
     disp(['Mean +ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)>0, 2)))]);
     disp(['Mean -ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)<0, 2)))]);
     
-    plotHandle.Position(3) = 680; plotHandle.Position(4) = 545;
+    disp('');
+    disp(['# of +ve jumps in r* for chosen fac from takeoff: ' num2str(sum(dummy2(:,2)>0))]);
+    disp(['# of -ve jumps in r* for chosen fac from takeoff: ' num2str(sum(dummy2(:,2)<0))]);
     
-    figure(plotHandle);
-    legend([pattern{data(ct).ct_pattern} ' ' light{data(ct).ct_light}]);
-    set(gca, 'FontSize', 16);
-    ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
-    xlabel('y* (m)', 'FontSize', 16);
+    disp(['% of # of +ve jumps in r* for chosen fac from takeoff: ' num2str(sum(dummy2(:,2)>0)/(sum(dummy2(:,2)<0)+sum(dummy2(:,2)>0)))]);
+    disp(['% of # of -ve jumps in r* for chosen fac from takeoff: ' num2str(sum(dummy2(:,2)<0)/(sum(dummy2(:,2)<0)+sum(dummy2(:,2)>0)))]);
+    
+    disp(['Mean +ve jumps in r* for chosen fac from takeoff: ' num2str(mean(dummy2(dummy2(:,2)>0, 2)))]);
+    disp(['Mean -ve jumps in r* for chosen fac from takeoff: ' num2str(mean(dummy2(dummy2(:,2)<0, 2)))]);
+    
+    disp('');
+    disp(['# of +ve jumps in r* for chosen fac from freeflight: ' num2str(sum(dummy3(:,2)>0))]);
+    disp(['# of -ve jumps in r* for chosen fac from freeflight: ' num2str(sum(dummy3(:,2)<0))]);
+    
+    disp(['% of # of +ve jumps in r* for chosen fac from freeflight: ' num2str(sum(dummy3(:,2)>0)/(sum(dummy3(:,2)<0)+sum(dummy3(:,2)>0)))]);
+    disp(['% of # of -ve jumps in r* for chosen fac from freeflight: ' num2str(sum(dummy3(:,2)<0)/(sum(dummy3(:,2)<0)+sum(dummy3(:,2)>0)))]);
+    
+    disp(['Mean +ve jumps in r* for chosen fac from freeflight: ' num2str(mean(dummy3(dummy3(:,2)>0, 2)))]);
+    disp(['Mean -ve jumps in r* for chosen fac from freeflight: ' num2str(mean(dummy3(dummy3(:,2)<0, 2)))]);
+    
+    % Fill Table S3
+    table_s3{ct} = zeros(1,10);
+    table_s3{ct}(3) = sum(has_rrefs);
+    table_s3{ct}(4) = N;
+    table_s3{ct}(5) = length(vertcat(ymean{:}));
+    table_s3{ct}(6) = length(vertcat(jumps{:})); % Total number of jumps
+    table_s3{ct}(7) = sum(dummy(:,2)>0)/(sum(dummy(:,2)<0)+sum(dummy(:,2)>0)); % % of jumps to a higher r
+    table_s3{ct}(8) = mean(dummy(dummy(:,2)>0, 2)); % mean delta r for jumps to a higher r
+    
+    table_s3_takeoff{ct} = zeros(1,10);
+    table_s3_takeoff{ct}(3) = sum(has_rrefs(data(ct).hastakeoff));
+    table_s3_takeoff{ct}(4) = sum(has_takeoff);
+    table_s3_takeoff{ct}(5) = length(vertcat(ymean{has_takeoff}));
+    table_s3_takeoff{ct}(6) = length(vertcat(jumps{has_takeoff})); % Total number of jumps
+    table_s3_takeoff{ct}(7) = sum(dummy2(:,2)>0)/(sum(dummy2(:,2)<0)+sum(dummy2(:,2)>0)); % % of jumps to a higher r
+    table_s3_takeoff{ct}(8) = mean(dummy2(dummy2(:,2)>0, 2)); % mean delta r for jumps to a higher r
+    
+    table_s3_freeflight{ct} = zeros(1,10);
+    table_s3_freeflight{ct}(3) = sum(has_rrefs(~data(ct).hastakeoff));
+    table_s3_freeflight{ct}(4) = sum(~has_takeoff);
+    table_s3_freeflight{ct}(5) = length(vertcat(ymean{~has_takeoff}));
+    table_s3_freeflight{ct}(6) = length(vertcat(jumps{~has_takeoff})); % Total number of jumps
+    table_s3_freeflight{ct}(7) = sum(dummy3(:,2)>0)/(sum(dummy3(:,2)<0)+sum(dummy3(:,2)>0)); % % of jumps to a higher r
+    table_s3_freeflight{ct}(8) = mean(dummy3(dummy3(:,2)>0, 2)); % mean delta r for jumps to a higher r
+    
+    
+%     plotHandle.Position(3) = 680; plotHandle.Position(4) = 545;
+%     
+%     figure(plotHandle);
+%     legend([pattern{data(ct).ct_pattern} ' ' light{data(ct).ct_light}]);
+%     set(gca, 'FontSize', 16);
+%     ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+%     xlabel('y* (m)', 'FontSize', 16);
     
 %     print(plotHandle, fullfile(saveDir,['multiple_rrefs_' pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]), '-dpdf');
 
@@ -1210,10 +1289,13 @@ set(gca, 'FontSize', 16);
 [mean(vertcat(ratio_rrref_negjumps{:})) std(vertcat(ratio_rrref_negjumps{:}))]
 
 dummy = cellfun(@(x) [mean(x) std(x)],delta_rrref_posjumps,'UniformOutput',false);
+dummy = cellfun(@(x) [mean(x) std(x)],delta_rrref_posjumps_freeflight,'UniformOutput',false);
+dummy = cellfun(@(x) [mean(x) std(x)],delta_rrref_posjumps_takeoff,'UniformOutput',false);
 dummy = vertcat(dummy{:})
 for ct=1:6
     disp([num2str(dummy(ct,1),'%0.3f') ' [' num2str(dummy(ct,2),'%0.3f') ']']);
 end
+
 dummy =cellfun(@(x) [mean(x) std(x)],delta_rrref_negjumps,'UniformOutput',false);
 vertcat(dummy{:})
 dummy =cellfun(@(x) [mean(x) std(x)],ratio_rrref_posjumps,'UniformOutput',false);
@@ -1281,79 +1363,193 @@ for ct=1:length(pattern)
     plot(log(y_vec),modelfun(Coefficients,log(y_vec)),'Color', line_cmap(ct,:),'LineWidth',3);
 end
 legend({'checkerboard','spoke'})
-%% Figure 5 (ymean vs rmean for each pattern) and one light condition (medium)
+%% Figure 5 (ymean vs rmean) for each pattern for a light and initial condition group
 % Panel a
 close all;
-chosen_light = 2; % medium
+ic_str = {'takeoff','freeflight'};
+ic_hasTakeoff = [true, false];
 
-taudots = [-0.8443719 -0.8443719 -0.8443719;
-           -0.7799527 -0.7799527 -0.7799527];
-% taudot_checker = -0.847; 
-% taudot = -0.780; % from analysis in R
-
-intercepts = [-1.117778 -1.045172 -0.9543105;
-              -0.9693903 -0.8967847 -0.8059232]; 
-          
-points_cmap = [252,187,161;
-200,200,200]./255;
-
-line_cmap = [215,48,31;
-37,37,37]./255;
-
-rmean = cell(1,length(pattern));
-ymean = cell(1,length(pattern));
-for ct=1:length(pattern)
-    data_ss = vertcat(data([data.ct_pattern]==ct & [data.ct_light]==chosen_light));
+% intercepts (takeoff)
+c{1} = [-1.456806   -1.379435   -1.287747;
+        -1.270285   -1.192914   -1.101225];
+% slopes (takeoff)
+m{1} = [-1.054312   -1.054312   -1.054312;
+        -0.9676285  -0.9676285  -0.9676285];
     
-    rmean{ct} = [];
-    ymean{ct} = [];
-    for ct_light=1:length(data_ss)
-        dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data_ss(ct_light).tracks_fac,'UniformOutput',false);
-        rmean{ct} = [rmean{ct}; vertcat(dummy{:})];
+% intercepts (freeflight)
+c{2} = [-1.000403   -0.923032   -0.8313437;
+        -0.8138813  -0.7365104  -0.6448221];
+% slopes (freeflight)
+m{2} = [-0.7769429  -0.7769429  -0.7769429;
+        -0.6902597  -0.6902597  -0.6902597];
+    
+points_cmap = [252,187,161;
+        200,200,200]./255;
+    
+line_cmap = [215,48,31;
+        37,37,37]./255;
+
+Dirplots = 'C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A1\Figures\5';
+savePDFs = true;
+
+for ct_ic = 2%1:length(ic_str)
+    taudots = m{ct_ic};
+    inctercepts = c{ct_ic};
+    
+    for ct1_light = 3%1:length(light)
+        chosen_light = ct1_light;
         
-        dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data_ss(ct_light).tracks_fac,'UniformOutput',false);
-        ymean{ct} = [ymean{ct}; vertcat(dummy{:})];
+        % Panel a
+        rmean = cell(1,length(pattern));
+        ymean = cell(1,length(pattern));
+        for ct=1:length(pattern)
+            data_ss = vertcat(data([data.ct_pattern]==ct & [data.ct_light]==chosen_light));
+            assert(length(data_ss)==1);
+            
+            dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti, data_ss.tracks_fac([data_ss.hastakeoff] == ic_hasTakeoff(ct_ic)),'UniformOutput',false);
+            rmean{ct} = vertcat(dummy{:});
+            
+            dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti, data_ss.tracks_fac([data_ss.hastakeoff] == ic_hasTakeoff(ct_ic)),'UniformOutput',false);
+            ymean{ct} = vertcat(dummy{:});
+        end
+        
+        data2plot = [vertcat(ymean{:}) vertcat(rmean{:}) [ones(size(rmean{1})); 2*ones(size(rmean{2}))]];
+        data2plot = data2plot(randperm(size(data2plot, 1)), :);
+        plotHandles(1) = figure; hold on;
+        % plot lines
+        y_vec = min(-ymean{1}):0.001:max(-ymean{1});
+        modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+        for ct=1:length(pattern)
+            Coefficients = [mean(intercepts(ct,chosen_light)) mean(taudots(ct,chosen_light))];
+            plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(ct,:),'LineWidth',3);
+        end
+        legend({'checkerboard','spoke'})
+        set(gca, 'FontSize', 16);
+        ylabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+        xlabel('y* (m)', 'FontSize', 16);
+        
+        scatter(-data2plot(:,1),-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+        ylim([0 10])
+        figureName{1} = ['patterns_' light{chosen_light} '_' ic_str{ct_ic} '_rvsy.pdf'];
+        
+        % Panel b - log plots
+        modelfun = @(b,x)(b(1)+b(2).*x);
+        plotHandles(2) = figure; hold on;
+        for ct=1:length(pattern)
+            Coefficients = [mean(intercepts(ct,:)) mean(taudots(ct,:))];
+            plot(log(y_vec),modelfun(Coefficients,log(y_vec)),'Color', line_cmap(ct,:),'LineWidth',3);
+        end
+        legend({'checkerboard','spoke'})
+        set(gca, 'FontSize', 16);
+        ylabel('log(r*) (1/s)', 'FontSize', 16);
+        xlabel('log(y*) (m)', 'FontSize', 16);
+        
+        scatter(log(-data2plot(:,1)),log(-data2plot(:,2)),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+        ylim([-4 3])
+        figureName{2} = ['patterns_' light{chosen_light} '_' ic_str{ct_ic} '_logrvslogy.pdf'];
+
+        if savePDFs
+            print(plotHandles(1), fullfile(Dirplots, figureName{1}), '-dpdf');
+            print(plotHandles(2), fullfile(Dirplots, figureName{2}), '-dpdf');
+        end
     end
+    
+    
 end
-data2plot = [vertcat(ymean{:}) vertcat(rmean{:}) [ones(size(rmean{1})); 2*ones(size(rmean{2}))]];
-data2plot = data2plot(randperm(size(data2plot, 1)), :);
-figure; hold on;
-% plot lines
-y_vec = min(-ymean{1}):0.001:max(-ymean{1});
-modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
-for ct=1:length(pattern)
-    Coefficients = [mean(intercepts(ct,chosen_light)) mean(taudots(ct,chosen_light))];
-    plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(ct,:),'LineWidth',3);
+
+
+%% Figure 5 (ymean vs rmean) for each initial condition for a light and pattern group
+% Panel a
+close all;
+ic_str = {'takeoff','freeflight'};
+ic_hasTakeoff = [true, false];
+
+% intercepts (takeoff)
+c{1} = [-1.456806   -1.379435   -1.287747;
+        -1.270285   -1.192914   -1.101225];
+% slopes (takeoff)
+m{1} = [-1.054312   -1.054312   -1.054312;
+        -0.9676285  -0.9676285  -0.9676285];
+    
+% intercepts (takeoff)
+c{2} = [-1.000403   -0.923032   -0.8313437;
+        -0.8138813  -0.7365104  -0.6448221];
+m{2} = [-0.7769429  -0.7769429  -0.7769429;
+        -0.6902597  -0.6902597  -0.6902597];
+    
+points_cmap = [166,206,227;
+178,223,138]./255;
+    
+line_cmap = [31,120,180;
+51,160,44]./255;
+
+Dirplots = 'C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A1\Figures\5';
+savePDFs = true;
+
+for ct_pattern = 2%1:length(pattern)
+%     taudots = m{ct_ic};
+%     inctercepts = c{ct_ic};
+    
+    for ct1_light = 3%1:length(light)
+        chosen_light = ct1_light;
+        
+        % Panel a
+        rmean = cell(1,length(pattern));
+        ymean = cell(1,length(pattern));
+        for ct=1:length(ic_hasTakeoff)
+            data_ss = vertcat(data([data.ct_pattern]==ct_pattern & [data.ct_light]==chosen_light));
+            assert(length(data_ss)==1);
+            
+            dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti, data_ss.tracks_fac([data_ss.hastakeoff] == ic_hasTakeoff(ct)),'UniformOutput',false);
+            rmean{ct} = vertcat(dummy{:});
+            
+            dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti, data_ss.tracks_fac([data_ss.hastakeoff] == ic_hasTakeoff(ct)),'UniformOutput',false);
+            ymean{ct} = vertcat(dummy{:});
+        end
+        
+        data2plot = [vertcat(ymean{:}) vertcat(rmean{:}) [ones(size(rmean{1})); 2*ones(size(rmean{2}))]];
+        data2plot = data2plot(randperm(size(data2plot, 1)), :);
+        plotHandles(1) = figure; hold on;
+        % plot lines
+        y_vec = min(-ymean{1}):0.001:max(-ymean{1});
+        modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+        for ct=1:length(ic_str)
+            Coefficients = [c{ct}(ct_pattern, chosen_light) m{ct}(ct_pattern,chosen_light)];
+            plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(ct,:),'LineWidth',3);
+        end
+        legend(ic_str)
+        set(gca, 'FontSize', 16);
+        ylabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+        xlabel('y* (m)', 'FontSize', 16);
+        
+        scatter(-data2plot(:,1),-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+        ylim([0 10])
+        figureName{1} = ['initialconditions_' light{chosen_light} '_' pattern{ct_pattern} '_rvsy.pdf'];
+        
+        % Panel b - log plots
+        modelfun = @(b,x)(b(1)+b(2).*x);
+        plotHandles(2) = figure; hold on;
+        for ct=1:length(ic_str)
+            Coefficients = [c{ct}(ct_pattern, chosen_light) m{ct}(ct_pattern,chosen_light)];
+            plot(log(y_vec),modelfun(Coefficients,log(y_vec)),'Color', line_cmap(ct,:),'LineWidth',3);
+        end
+        legend(ic_str)
+        set(gca, 'FontSize', 16);
+        ylabel('log(r*) (s-1)', 'FontSize', 16);
+        xlabel('log(y*) (m)', 'FontSize', 16);
+        
+        scatter(log(-data2plot(:,1)),log(-data2plot(:,2)),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+        ylim([-4 3])
+        figureName{2} = ['initialconditions_' light{chosen_light} '_' pattern{ct_pattern} '_logrvslogy.pdf'];
+
+        if savePDFs
+            print(plotHandles(1), fullfile(Dirplots, figureName{1}), '-dpdf');
+            print(plotHandles(2), fullfile(Dirplots, figureName{2}), '-dpdf');
+        end
+    end
+    
+    
 end
-legend({'checkerboard','spoke'})
-set(gca, 'FontSize', 16);
-ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
-xlabel('y* (m)', 'FontSize', 16);
-
-scatter(-data2plot(:,1),-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
-ylim([0 10])
-
-
-% Panel b - log plots
-modelfun = @(b,x)(b(1)+b(2).*x);
-figure; hold on;
-for ct=1:length(pattern)
-    Coefficients = [mean(intercepts(ct,:)) mean(taudots(ct,:))];
-    plot(log(y_vec),modelfun(Coefficients,log(y_vec)),'Color', line_cmap(ct,:),'LineWidth',3);
-end
-legend({'checkerboard','spoke'})
-set(gca, 'FontSize', 16);
-ylabel('log(r*) (1/s)', 'FontSize', 16);
-xlabel('log(y*) (m)', 'FontSize', 16);
-
-scatter(log(-data2plot(:,1)),log(-data2plot(:,2)),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
-
-% Panel c
-% from R
-means = [0.580 0.637 0.728 0.575 0.663 0.755]; % mean r* at ymean
-se = [0.0345 0.0332 0.0319 0.0341 0.0323 0.0313];
-ymean = exp(-1.996058); % mean(data$logy) in R
-ylim([-4 3])
 
 
 %% Figure supplement (ymean vs vmean for each pattern) and one light condition
@@ -1824,32 +2020,32 @@ end
 
 %% Independence with factor f
 close all;
-stat_coeffs = [ 0.25000000 -1.08846514 -0.86200270  0.10949501  0.06657793  0.19319169  0.05412709
-                0.50000000 -1.05869342 -0.83253711  0.12561129  0.06431783  0.14973640  0.04629612
-                0.75000000 -1.11607669 -0.84773447  0.14519103  0.07566884  0.15934225  0.05720759
-                1.00000000 -1.11777760 -0.84437193  0.14838726  0.07260567  0.16346712  0.06441925
-                1.25000000 -1.12105049 -0.84082487  0.17032351  0.08581880  0.16437322  0.07830893
-                1.50000000 -1.09069319 -0.81935199  0.15186821  0.09522983  0.16607479  0.06834520
-                1.75000000 -1.08058143 -0.81209318  0.12979338  0.09425142  0.16696699  0.06089656
-                2.00000000 -1.07886332 -0.80658529  0.14057835  0.09354859  0.17341495  0.06461033
-                2.25000000 -1.06817079 -0.79794962  0.13338053  0.08850605  0.17219498  0.06026348
-                2.50000000 -1.08102648 -0.80145288  0.11972203  0.09113614  0.17120298  0.05549719]; 
-                %[f     (Intercept)          log(y)        pattern2          light2          light3 log(y):pattern2
+stat_coeffs = [0.25 -1.0371492 -0.8288445 0.1680640 0.06722337 0.1914813 -0.2886150 -0.1924548 0.08733864
+  0.50 -0.9369169 -0.7636857 0.2026850 0.07032665 0.1559910 -0.4998219 -0.3004384 0.09135023
+ 0.75 -1.0003020 -0.7821032 0.2103637 0.08062361 0.1643271 -0.5078704 -0.3047578 0.09504519
+ 1.00 -1.0004029 -0.7769429 0.1865216 0.07737095 0.1690592 -0.4564032 -0.2773688 0.08668321
+ 1.25 -1.0003118 -0.7713873 0.2060371 0.08820625 0.1697204 -0.4547322 -0.2795623 0.09876797
+ 1.50 -0.9699200 -0.7494282 0.1882308 0.09839469 0.1718822 -0.4609692 -0.2858695 0.08960625
+ 1.75 -0.9694885 -0.7459519 0.1649910 0.09864048 0.1746798 -0.4347055 -0.2732475 0.08164087
+ 2.00 -0.9686911 -0.7410899 0.1695754 0.09830410 0.1821716 -0.4140936 -0.2607344 0.08212009
+ 2.25 -0.9490046 -0.7286980 0.1589490 0.09340421 0.1802691 -0.4373191 -0.2713209 0.07607062
+2.50 -0.9497667 -0.7277571 0.1483887 0.09542466 0.1786686 -0.4649931 -0.2796162 0.07213370]; 
+%   model_a<-lmer(data=data,log(r)~log(y)+pattern+light+hasTakeoff+hasTakeoff:log(y)+log(y):pattern+(1|day)+(1|approach)+(1|landingSide))
 
                 
-se=[  0.25 0.09780280 0.04621912 0.12484919 0.03397752 0.03272497 0.06050423
-  0.50 0.06284643 0.02686628 0.08357760 0.02152004 0.02065386 0.03639810
-  0.75 0.05245319 0.02126458 0.06672413 0.01810199 0.01724768 0.02826893
-  1.00 0.04753647 0.01790679 0.06081615 0.01598175 0.01520607 0.02386188
-  1.25 0.04453820 0.01580678 0.05643285 0.01479127 0.01407374 0.02100452
-  1.50 0.04293834 0.01456209 0.05242353 0.01408837 0.01338564 0.01922425
-  1.75 0.04275667 0.01374808 0.05140469 0.01341242 0.01271499 0.01806045
-  2.00 0.03999263 0.01284847 0.04922143 0.01285597 0.01217027 0.01692365
-  2.25 0.03938018 0.01213523 0.04945570 0.01242411 0.01176058 0.01602704
- 2.50 0.03935380 0.01170116 0.04832551 0.01216373 0.01149490 0.01540906];
+se=[ 0.25 0.10604607 0.04989762 0.12486637 0.03352715 0.03229482 0.12978995 0.06606190 0.06121828
+ 0.50 0.06577083 0.02843891 0.08025833 0.02106430 0.02021143 0.07646609 0.03826309 0.03622024
+ 0.75 0.05507678 0.02239210 0.06352228 0.01771587 0.01688448 0.06058881 0.03014584 0.02808346
+1.00 0.04970374 0.01906045 0.05689685 0.01570986 0.01494513 0.05155132 0.02537048 0.02364128
+  1.25 0.04662466 0.01686840 0.05189531 0.01450126 0.01379680 0.04552804 0.02223016 0.02079040
+1.50 0.04565412 0.01551404 0.04775127 0.01379896 0.01311169 0.04193389 0.02030778 0.01901069
+ 1.75 0.04558983 0.01463400 0.04667935 0.01314643 0.01246691 0.03955866 0.01906651 0.01787560
+ 2.00 0.04267608 0.01374200 0.04466468 0.01264879 0.01197854 0.03724332 0.01783623 0.01675293
+2.25 0.04159558 0.01298885 0.04468287 0.01223105 0.01158155 0.03554196 0.01691859 0.01585045
+ 2.50 0.04167107 0.01254546 0.04397355 0.01199479 0.01133763 0.03410576 0.01617004 0.01524461];
 
 figure;
-tiledlayout(6,1);
+tiledlayout(8,1);
 
 nexttile
 errorbar(stat_coeffs(:,1),stat_coeffs(:,2), 2*se(:,2),'Linewidth',2)
@@ -1860,15 +2056,15 @@ set(gca, 'FontSize', 16);
 
 nexttile
 errorbar(stat_coeffs(:,1),stat_coeffs(:,3), 2*se(:,3),'Linewidth',2)
-ylim([-1 -0.7]);
-yticks([-1:0.15:-0.7]);
+ylim([-1 -0.6]);
+yticks([-1:0.2:-0.6]);
 ylabel('log(y)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 
 nexttile
 errorbar(stat_coeffs(:,1),stat_coeffs(:,4), 2*se(:,4),'Linewidth',2)
-ylim([-0.2 0.4]);
-yticks([-0.2:0.3:0.4]);
+ylim([-0.2 0.5]);
+yticks([-0.2:0.35:0.5]);
 ylabel('pattern2', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 
@@ -1888,6 +2084,20 @@ set(gca, 'FontSize', 16);
 
 nexttile
 errorbar(stat_coeffs(:,1),stat_coeffs(:,7), 2*se(:,7),'Linewidth',2)
+ylim([-0.6 0]);
+yticks([-0.6:0.3:0]);
+ylabel('hasTakeoff', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+nexttile
+errorbar(stat_coeffs(:,1),stat_coeffs(:,8), 2*se(:,8),'Linewidth',2)
+ylim([-0.4 0]);
+yticks([-0.4:0.2:0]);
+ylabel('log(y):hasTakeoff', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+nexttile
+errorbar(stat_coeffs(:,1),stat_coeffs(:,9), 2*se(:,9),'Linewidth',2)
 ylim([-0.1 0.2]);
 yticks([-0.1:0.15:0.2]);
 ylabel('log(y):pattern2', 'FontSize', 16);

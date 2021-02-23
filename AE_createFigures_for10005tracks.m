@@ -79,6 +79,48 @@ for ct_pattern = 1:length(pattern)
 end
 % keyboard;
 
+%% Compute averages of starting velocities for landings with take-off and free-flight
+y_start = cell(length(data_all),1);
+V_start = cell(length(data_all),1);
+V3d_start = cell(length(data_all),1);
+for ct=1:length(data_all)
+    for ct1=1:length(data_all(ct).state_LDF)
+        
+        [y_start{ct}(ct1,1), ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        V_start{ct}(ct1,1) = data_all(ct).state_LDF(ct1).filteredState(ymin_indx,6);
+        V3d_start{ct}(ct1,1) = (sum(data_all(ct).state_LDF(ct1).filteredState(ymin_indx,5:7).^2))^0.5;
+    end
+end
+
+V3d = vertcat(V3d_start{:});
+V = vertcat(V_start{:});
+
+V3d_freeFlight = V3d(~[data_all.hastakeoff_pertreatment]);
+V3d_takeOff = V3d([data_all.hastakeoff_pertreatment]);
+[mean(V3d_freeFlight) std(V3d_freeFlight)]
+[mean(V3d_takeOff) std(V3d_takeOff)]
+
+[sum([data_all.hastakeoff_pertreatment]) sum(~[[data_all.hastakeoff_pertreatment]])]
+quantile(V3d_freeFlight,[0.25, 0.5, 0.75])
+quantile(V3d_takeOff,[0.25, 0.5, 0.75])
+
+
+close all;
+map = brewermap(3,'Set1'); 
+figure;
+histogram(V3d([data_all.hastakeoff_pertreatment]),'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+hold on;
+histogram(V3d(~[data_all.hastakeoff_pertreatment]),'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+legend('From take-off','From free-flight','fontsize',16)
+xlabel('V3d_0 (m/s)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+axis tight
+xlim([0 2])
+
+[sum([data_all.hastakeoff_pertreatment]) sum(~[[data_all.hastakeoff_pertreatment]])]
+%%
+
 
 % %  Write file for analysis in R for 10005 tracks
 writeFile = true;
@@ -432,3 +474,109 @@ xlabel('y (m)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 xline(0.04); xline(0.11);
 legend(light);
+
+%% %%%%%%%%%%% For iScience revision %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%% Plot average approach for different light conditions averaged over patterns
+close all;
+% Collect tracks from ymax to end
+for ct=1:length(data_all)
+    data_all(ct).filteredStates_all = struct.empty;
+    for ct1=1:1:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+        [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,:);
+    end
+end
+
+ybins = -0.4:0.005:-0.01;
+colors = [227,74,51; 67,162,202; 253,212,158]./255;
+colors = [120 120 120; 67,162,202; 245 130 46]./255;
+
+cmap{1} = [215,48,31; 252,141,89; 253,212,158 ]./255;
+cmap{2} = [35,139,69; 116,196,118; 199,233,192]./255;
+% fig1 = figure; hold on;
+yrange = [0.02 0.12];
+
+ic = {'free-flight','take-off'}; % initial condition
+ic_hasTakeoff = [false, true];
+
+for ct_ic = 1:length(ic)
+    fig1 = figure;
+    legendString = {};
+    for ct_pattern = 1:length(pattern)
+        for ct_light=1:length(light)
+            legendString{end+1} = [pattern{ct_pattern} ' ' light{ct_light}];
+            tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).light == ct_light & data_all(x).pattern == ct_pattern & data_all(x).hastakeoff_pertreatment == ic_hasTakeoff(ct_ic)),1:length(data_all), 'UniformOutput', false);
+            tracks = [tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
+            data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+            data_xyzuvw = vertcat(data_xyzuvw{:});
+            xyzuvw = [];
+            y = [];
+            sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+            r = [];
+            sem_r = [];
+            for ct=1:length(ybins)-1
+                dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+                y = [y; mean(ybins(ct:ct+1))];
+                xyzuvw = [xyzuvw; mean(dummy)];
+                r = [r; mean(dummy(:,5)./dummy(:,2))];
+                sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+                %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+                sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+                %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+            end
+            
+            
+            
+            
+            subplot(2,1,1); hold on;
+            if ct_pattern == 1
+                plot(-y,xyzuvw(:,5),'color', cmap{ct_pattern}(ct_light,:), 'Linewidth',2);
+            elseif ct_pattern == 2
+                plot(-y,xyzuvw(:,5),'color', cmap{ct_pattern}(ct_light,:), 'Linewidth',2,'Markersize',2);
+            end
+            % plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
+            % plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
+%             fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_light,:), 'EdgeColor', colors(ct_light,:));
+            
+            
+            subplot(2,1,2); hold on;
+            if ct_pattern == 1
+                plot(-y,-r,'color', cmap{ct_pattern}(ct_light,:), 'Linewidth',2);
+            elseif ct_pattern == 2
+                plot(-y,-r,'color', cmap{ct_pattern}(ct_light,:), 'Linewidth',2,'Markersize',1);
+            end
+%             a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_light,:), 'EdgeColor', colors(ct_light,:));
+            
+            
+            
+            
+        end
+    end
+    figure(fig1);
+    subplot(2,1,1);
+    ylabel('V (ms-1)', 'FontSize', 16);
+    title(ic{ct_ic}, 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    if ct_ic == 1
+        ylim([0 0.3]);
+        yticks([0:0.1:0.3]);
+    elseif ct_ic == 2
+        ylim([0 0.5]);
+        yticks([0:0.1:0.5]);
+    end
+        
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+    subplot(2,1,2);
+    ylabel('r (s-1)', 'FontSize', 16);
+    xlabel('y (m)', 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    ylim([0 6]);
+    yticks([0:2:6]);
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+    legend(legendString);
+end

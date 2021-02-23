@@ -358,7 +358,7 @@ elseif ispc
 end
 data_write = [];
 factors = [0.25:0.25:2.5];
-for ct_factor=1:length(factors)
+for ct_factor=4%1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';

@@ -468,3 +468,12 @@ view([-146 19])
 
 [max(-vertcat(y_start{:})) min(-vertcat(y_start{:}))]
 [max(vertcat(V_start{:})) min(vertcat(V_start{:}))]
+
+%% For data in the manuscript
+V3d_freeFlight = V3d(~[data.hasTakeoff]);
+V3d_takeOff = V3d([data.hasTakeoff]);
+[mean(V3d_freeFlight) std(V3d_freeFlight)]
+[mean(V3d_takeOff) std(V3d_takeOff)]
+
+quantile(V3d_freeFlight,[0.25, 0.5, 0.75])
+quantile(V3d_takeOff,[0.25, 0.5, 0.75])
