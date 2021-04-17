@@ -54,7 +54,7 @@ end
 
 
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = true;
+savePlots = false;
 savePDFs = false;
 
 pattern = {'checkerboard', 'spokes'};
@@ -384,16 +384,16 @@ clc; close all;
 % clear;
 if isunix
     dataFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1.mat';
-    DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation';
+    DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation2';
 elseif ispc
     dataFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1.mat';
-    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation';
+    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_estimation2';
 end
 % load(dataFile);
 
-delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = false;
-savePDFs = false;
+delPreviousPlots = true; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = true;
+savePDFs = true;
 
 pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};
@@ -414,13 +414,14 @@ for ct_pattern=2%1:length(pattern)
         end
         DirPlots_treatment = fullfile(DirPlots, [pattern{data_all(ct_pattern,ct_light).ct_pattern} '_' light{data_all(ct_pattern,ct_light).ct_light}]);
         
-        for ct1=151%1:length(data_all(ct_pattern,ct_light).tracks_fac)
+        for ct1=1:length(data_all(ct_pattern,ct_light).tracks_fac)
             % create tf vector in order of rrefEntrySegments
             tfs = data4est_lowpass{ct_pattern,ct_light}.tfest(:,:,data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1, 2);
             sysiddata = data4est_lowpass{ct_pattern,ct_light}.iddata(data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1);
             
             % plot data
-            plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withActualFilteredEstimatedData(chosen_fac, sysiddata, tfs);
+%             plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withActualFilteredEstimatedData(chosen_fac, sysiddata, tfs);
+            plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withActualFilteredEstimatedData2(chosen_fac, sysiddata, tfs);
 %             data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withSimulatedData(chosen_fac, tfs);
             
             if ~isempty(plotHandles)
@@ -536,7 +537,7 @@ for ct_pattern = 1:length(pattern)
         fitPercent{ct_pattern, ct_light} = arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light}.tfest(:,:,x,model_order_indx).Report.Fit.FitPercent,1:n);
     end
 end
-createBoxPlot({fitPercent{:}}', {labels{:}}', 'FitPercent'); ylim([85 100])
+createBoxPlot({fitPercent{1,1:3} fitPercent{2,1:3}}', {labels{1,1:3} labels{2,1:3}}', 'FitPercent'); ylim([50 100])
 
 % Free Parameters box plots (for selected model order and selected factor)
 labels = cell(0, 1); % for x-axis of boxplots

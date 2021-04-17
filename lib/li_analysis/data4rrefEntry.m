@@ -36,6 +36,12 @@ classdef data4rrefEntry < handle
         delta_y_analytical; % N by 1
         delta_y_actual; % N by 1
         
+        yEntryStart;
+        delta_Ventry;
+        delta_tentry;
+        amean_entry;
+        
+        
     end
      methods
          function obj = data4rrefEntry()

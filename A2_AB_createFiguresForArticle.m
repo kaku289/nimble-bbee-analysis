@@ -39,19 +39,23 @@ for ct_pattern=2%1:length(pattern)
         for ct2=1:length(selected_tracks)
             ct1 = selected_tracks(ct2);
 %             % create tf vector in order of rrefEntrySegments
-%             tfs = data4est_lowpass{ct_pattern,ct_light}.tfest(:,:,data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1, 2);
-%             sysiddata = data4est_lowpass{ct_pattern,ct_light}.iddata(data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1);
+            tfs = data4est_lowpass{ct_pattern,ct_light}.tfest(:,:,data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1, 2);
+            sysiddata = data4est_lowpass{ct_pattern,ct_light}.iddata(data4est_lowpass{ct_pattern,ct_light}.track_indexes == ct1);
             
             % plot data
-            plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_with_acc(chosen_fac);
+%             plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_with_acc(chosen_fac);
 %             data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withSimulatedData(chosen_fac, tfs);
-            
+            plotHandles = data_all(ct_pattern,ct_light).tracks_fac(ct1).plot_rrefsEntry_withActualFilteredEstimatedData2(chosen_fac, sysiddata, tfs)
             if ~isempty(plotHandles)
                 
                 % Resizing the figures
                 for i=1:length(plotHandles)
-                    plotHandles(i).Position(3) = 560;
-                    plotHandles(i).Position(4) = 560;
+%                     plotHandles(i).Position(3) = 560;
+%                     plotHandles(i).Position(4) = 560;
+                    
+                    % For sys-id simulation plots
+                    plotHandles(i).Position(3) = 450;
+                    plotHandles(i).Position(4) = 650;
                     
                     if i==1
                         figureName = ['fac_' num2str(chosen_fac,'%0.2f') ...

@@ -43,7 +43,8 @@ if isunix
 elseif ispc
     inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
     outputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry_with_rdot.mat';
-    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_with_time';
+%     DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_with_time';
+    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_entry_with_time2';
 end
 
 
@@ -59,7 +60,7 @@ light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
-% factors = [1];
+factors = [1];
 
 interval_for_rdot_estimate = [0.2 0.8]; % in percentage of rref
 for ct_pattern = 1:length(pattern)
@@ -116,8 +117,9 @@ for ct_pattern = 1:length(pattern)
                               
                               if savePlots
                                   for ct_factor=1:length(factors)
+                                      plotHandles = excerpt.plot_rrefsEntry_with_rdotestimate(factors(ct_factor));
 
-                                      plotHandles = excerpt.plot_rrefsEntry_with_time(factors(ct_factor));
+%                                       plotHandles = excerpt.plot_rrefsEntry_with_time(factors(ct_factor));
 %                                       plotHandles = excerpt.plot_rrefsEntry(factors(ct_factor));
 %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
 
@@ -245,17 +247,22 @@ for ct_fac=1:length(factors)
             diff_delta_y_dum{ct_pattern, ct_light} = delta_y_analytical{ct_pattern, ct_light} - delta_y_actual{ct_pattern, ct_light};
         end
     end
-    figure;
-    subplot(1,2,1);
+%     figure;
+%     subplot(1,2,1);
     createBoxPlot({Rsquare{:}}', {labels{:}}', 'R2')
     title(['Factor = ' num2str(factors(ct_fac))], 'FontSize', 18);
+    ylim([0.5 1]);
+    yticks([0.5:0.1:1]);
     
-    subplot(1,2,2);
+%     figure;
+%     subplot(1,2,2);
     createBoxPlot({diff_delta_y_dum{:}}', {labels{:}}', 'Diff delta_y')
     title(['Factor = ' num2str(factors(ct_fac))], 'FontSize', 18);
 end
 
-
+% For article
+quantile(vertcat(Rsquare{:}), [0.25 0.5 0.75])
+quantile(vertcat(diff_delta_y_dum{:}), [0.25 0.5 0.75])
 % Plot rdot vs ymean
 figure;
 plot(vertcat(ymean{:}), vertcat(rdot{:}),'o');
@@ -363,30 +370,53 @@ for ct_factor=1:length(factors)
     isRise = vertcat(data_fac.isRise);
     delta_r = vertcat(data_fac.delta_r);
     
-    yEntryStart = -vertcat(data_fac.yEntryStart);
-    delta_Ventry = vertcat(data_fac.delta_Ventry);
-    delta_tentry = vertcat(data_fac.delta_tentry);
+    yStart = -vertcat(data_fac.yEntryStart);
+    delta_V = vertcat(data_fac.delta_Ventry);
+    delta_t = vertcat(data_fac.delta_tentry);
+    amean = vertcat(data_fac.amean_entry);
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r rdot factor*ones(size(r,1),1) isRise delta_r vertcat(hasTakeoff_fac{:}) yEntryStart delta_Ventry delta_tentry];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r rdot factor*ones(size(r,1),1) isRise delta_r vertcat(hasTakeoff_fac{:}) yStart delta_V delta_t amean];
 end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','rref','rdot','threshold', 'isRise', 'delta_r', 'hasTakeoff', 'ystart', 'deltaV', 'deltaT'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','rref','rdot','threshold', 'isRise', 'delta_r', 'hasTakeoff', 'ystart', 'deltaV', 'deltaT', 'Amean'});
     writetable(T,r_file);
 end
 
+%% Plot histogram of rdote
+chosen_fac = 1;
+dayCol = 6;
+rdotCol =9;
+factorCol = 10;
+isriseCol = 11;
+data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
+
+figure;
+% histogram(data_ss(:,rdotCol));
+histfit(data_ss(:,rdotCol),[],'Gamma')
+xlim([0 40]);
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+
+xlabel('Estimated rate-of-relative-rate-of-expansion, rdote (s-2)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+pd = fitdist(data_ss(:,rdotCol),'Gamma');
+median(data_ss(:,rdotCol))
 %% Plot statistical model from R
 close all;
 % R model
 % Factor = 1.5, with ymean as y
-coeffs = [1.41786160 -0.23188443  0.03265318  0.10269169 -0.12191186  0.30937950 -0.36988825 -0.11229241]; % [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
-% coeffs = [1.40992047 -0.22552086  0.04417238  0.10747444 -0.15834505  0.32712641 -0.39577418 -0.13178163]; 
+% coeffs = [1.41786160 -0.23188443  0.03265318  0.10269169 -0.12191186  0.30937950 -0.36988825 -0.11229241]; % [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+
 % Factor = 1.5, with ystart as y
 % coeffs = [1.33920177 -0.29558317  0.03165654  0.09682028 -0.15971722  0.30151310 -0.35868115 0]; % [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
 
+% Factor = 1, with ystart as y
+coeffs = [1.32535340 -0.29487259  0.04202344  0.10155882 -0.21375144  0.31075134 -0.38859555 0];
 % data_all.approach = data_write(:,1);
 % data_all.landingSide = data_write(:,2);
 % data_all.pattern = data_write(:,3);
@@ -403,17 +433,25 @@ patternCol = 3;
 lightCol = 4;
 timeCol = 5;
 dayCol = 6;
-yCol = 7;
+yCol = 14;
 rrefCol = 8;
 rdotCol =9;
 factorCol = 10;
 isriseCol = 11;
 deltarCol = 12;
-r0Col = 14;
+deltaVCol = 15;
+deltatCol = 16;
+ameanCol = 17;
+% data_write(:,end+1) = data_write(:,rrefCol)-data_write(:,deltarCol);
+% r0Col = size(data_write,2);
+data_write(:,end+1) = data_write(:,deltaVCol)./data_write(:,deltatCol);
+dvdtCol = size(data_write,2);
+% rdotCol = ameanCol; %dvdtCol;
 
 % get subset of data
-data_write(:,14) = data_write(:,rrefCol)-data_write(:,deltarCol);
-chosen_fac = 1.5;
+
+chosen_fac = 1;
+data_ss = data_write(abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 
 % Create basic plots
@@ -464,6 +502,258 @@ xlabel('rref (s-1)', 'FontSize', 14);
 % set(gca, 'FontSize', 14);
 % ylabel('rdot (s-2)', 'FontSize', 14);
 % xlabel('r0 (s-1)', 'FontSize', 14);
+%% Plot rdot as a function of y, delta_r and rref (4-D plot)
+% res = rdot; x1 = y; x2 = deltar; x3 = rref; x4 = light;
+
+close all;
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+
+% values for which lines will be plotted
+y_percentile_5_95 = quantile(y, [0.05, 0.95]);
+deltar_percentile_5_95 = quantile(deltar, [0.05, 0.95]);
+rref_percentile_5_50_95 = quantile(rref, [0.05, 0.5, 0.95]);
+rdot_percentile_5_50_95 = quantile(rdot, [0.05, 0.5, 0.95]);
+
+% Untransformed domain
+res = rdot; x1 = y; x2 = deltar; x3 = rref; x4 = light;
+
+x3_centers = quantile(x3,[0.25 0.5 0.75]); % values for which rref data is binned
+binwidth = 1.5; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
+% x3_centers = [0.1 0.2 0.3];
+% binwidth = 0.1; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
+
+% x2_forplot = [];
+% res_forplot = [];
+% for ct=1:3 % for each light condition
+%     for ct1=1:length(x3_centers)  % for each x3
+%         dummy = x2(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,yCol) <= x3_centers(ct1)+binwidth/2));
+%         dummy1 = res(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,yCol) <= x3_centers(ct1)+binwidth/2));
+%         x2_forplot = [x2_forplot; dummy]; 
+%         res_forplot = [res_forplot; dummy1]; 
+%     end
+% end
+% x2range = rref_percentile_5_50_95([1 end]);
+% x2range = [round(x2range(1)*10)/10 round(max(x2range(2))*10)/10];
+% x2range = [1 5.5];
+% res_range = quantile(res, [0.05, 0.95]);
+resRange = [4 21];
+yRange = [0.05 0.35];
+deltarRange = [0.25 4];
+yvalues = yRange(1):0.025:yRange(2);
+deltarvalues = deltarRange(1):0.25:deltarRange(2);
+[Y,DELTAR] = meshgrid(yvalues, deltarvalues);
+% cmap=brewermap(round(diff(x2range)/0.5),'Set1'); 
+% cmap = jet(round(diff(resRange)/1));  
+cmap = summer(round(diff(resRange)/1));  
+% cmap = [0.8500, 0.3250, 0.0980; 0, 0.4470, 0.7410; 0.4660, 0.6740, 0.1880];
+edges = round(linspace(resRange(1),resRange(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+% For plotting continuous lines
+% x2quantiles = quantile(x2_forplot,[0.05 0.5 0.95]) 
+% x2quantiles = quantile(data_ss(:,rrefCol),[0.05 0.5 0.95]) % x2 values for which lines are plotted
+% deltar_values_cont = 0.2:0.01:4; % deltar values for which lines are plotted
+
+figure2d = figure; hold on;
+colormap(cmap);
+
+figure2d_log = figure; hold on;
+colormap(cmap);
+for ct=1:3 % for each light condition (each row)
+    for ct1=1:length(x3_centers)  % for each x3 (each column)
+        figure(figure2d);
+        subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
+        % Plot surface
+        rdot_response = coeffs(1) + coeffs(2)*log(Y) + coeffs(5)*log(DELTAR) + ...
+                coeffs(6)*log(x3_centers(ct1)) + coeffs(7)*log(DELTAR).*log(Y) + ...
+                + coeffs(8)*log(DELTAR)*log(x3_centers(ct1));
+        if ct == 2
+            % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+            rdot_response = rdot_response + coeffs(3);
+        elseif ct == 3
+            rdot_response = rdot_response + coeffs(4);
+        end
+        contourf(Y, DELTAR, exp(rdot_response), edges, 'LineStyle', 'none')  
+        
+        data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,rrefCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,rrefCol) <= x3_centers(ct1)+binwidth/2),:);
+        res_ss2 = data_ss2(:,rdotCol);
+        [data_cmap, ~] = discretize(res_ss2, edges);
+        data_cmap(res_ss2<=edges(1)) = 1; data_cmap(res_ss2>=edges(end)) = size(cmap,1);
+        scatter(data_ss2(:,yCol), data_ss2(:,deltarCol), 15, cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+%         colorbar
+        
+        set(gca, 'FontSize', 16);
+%         ylim([0, 35]);
+%         yticks([0:5:35]);
+%         if ct1==1
+%             xlim([0 5]);
+%             xticks([0:1:5]);
+%         elseif ct1==2
+%             xlim([0 6]);
+%             xticks([0:1:6]);
+%         elseif ct1==3
+%             xlim([0 6]);
+%             xticks([0:1:6]);
+%         end
+        figure2d.Position = [-1313 46 895 820];
+        
+        figure(figure2d_log);
+        subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
+        contourf(log(Y), log(DELTAR), rdot_response, log(edges), 'LineStyle', 'none');
+        scatter(log(data_ss2(:,yCol)), log(data_ss2(:,deltarCol)), 15, cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+        
+        set(gca, 'FontSize', 16);
+%         ylim([0, 4]);
+%         yticks([0:1:4]);
+%         xlim([-1.5 2]);
+%         xticks([-1.5:0.5:2]);
+        figure2d_log.Position = [-1313 46 895 820];
+    end
+end
+% figure(figure2d);
+% cmap_bar = colorbar('eastoutside');
+% caxis(edges([1 end]));
+% cmap_bar.Ticks = [edges(1) edges(end)];
+% cmap_bar.Label.String = 'delta_r';
+% cmap_bar.Label.FontSize = 16;
+
+
+figure;
+colormap(cmap);
+cmap_bar = colorbar('eastoutside');
+caxis(edges([1 end]));
+cmap_bar.Ticks = [edges(1) edges(end)];
+cmap_bar.Label.String = 'rdot';
+cmap_bar.Label.FontSize = 16;
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+%% Plot rdot as a function of y, delta_r and rref (4-D plot) - NOT TO BE USED
+% res = rdot; x1 = rref; x2 = deltar; x3 = y; x4 = light;
+
+close all;
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+
+% values for which lines will be plotted
+y_percentile_5_95 = quantile(y, [0.05, 0.95]);
+deltar_percentile_5_95 = quantile(deltar, [0.05, 0.95]);
+rref_percentile_5_95 = quantile(rref, [0.05, 0.95]);
+rdot_percentile_5_50_95 = quantile(rdot, [0.05, 0.5, 0.95]);
+
+% Untransformed domain
+res = rdot; x1 = rref; x2 = deltar; x3 = y; x4 = light;
+
+x3_centers = quantile(x3,[0.25 0.5 0.75]); % values for which rref data is binned
+binwidth = 0.05; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
+% x3_centers = [0.1 0.2 0.3];
+% binwidth = 0.1; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
+
+% x2_forplot = [];
+% res_forplot = [];
+% for ct=1:3 % for each light condition
+%     for ct1=1:length(x3_centers)  % for each x3
+%         dummy = x2(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,yCol) <= x3_centers(ct1)+binwidth/2));
+%         dummy1 = res(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,yCol) <= x3_centers(ct1)+binwidth/2));
+%         x2_forplot = [x2_forplot; dummy]; 
+%         res_forplot = [res_forplot; dummy1]; 
+%     end
+% end
+% x2range = rref_percentile_5_50_95([1 end]);
+% x2range = [round(x2range(1)*10)/10 round(max(x2range(2))*10)/10];
+% x2range = [1 5.5];
+% res_range = quantile(res, [0.05, 0.95]);
+resRange = [4 21];
+rrefRange = [1.25 8];
+deltarRange = [0.25 5];
+rrefvalues = rrefRange(1):0.25:rrefRange(2);
+deltarvalues = deltarRange(1):0.25:deltarRange(2);
+[RREF,DELTAR] = meshgrid(rrefvalues, deltarvalues);
+% cmap=brewermap(round(diff(x2range)/0.5),'Set1'); 
+% cmap = jet(round(diff(resRange)/1));  
+cmap = summer(round(diff(resRange)/1));  
+% cmap = [0.8500, 0.3250, 0.0980; 0, 0.4470, 0.7410; 0.4660, 0.6740, 0.1880];
+edges = round(linspace(resRange(1),resRange(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+% For plotting continuous lines
+% x2quantiles = quantile(x2_forplot,[0.05 0.5 0.95]) 
+% x2quantiles = quantile(data_ss(:,rrefCol),[0.05 0.5 0.95]) % x2 values for which lines are plotted
+% deltar_values_cont = 0.2:0.01:4; % deltar values for which lines are plotted
+
+figure2d = figure; hold on;
+colormap(cmap);
+
+figure2d_log = figure; hold on;
+colormap(cmap);
+for ct=1:3 % for each light condition (each row)
+    for ct1=1:length(x3_centers)  % for each x3 (each column)
+        figure(figure2d);
+        subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
+        % Plot surface
+        rdot_response = coeffs(1) + coeffs(2)*log(x3_centers(ct1)) + coeffs(5)*log(DELTAR) + ...
+                coeffs(6)*log(RREF) + coeffs(7)*log(DELTAR).*log(x3_centers(ct1)) + ...
+                + coeffs(8)*log(DELTAR).*log(RREF);
+        if ct == 2
+            % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+            rdot_response = rdot_response + coeffs(3);
+        elseif ct == 3
+            rdot_response = rdot_response + coeffs(4);
+        end
+        contourf(RREF, DELTAR, exp(rdot_response), edges, 'LineStyle', 'none')  
+        
+        data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,yCol) <= x3_centers(ct1)+binwidth/2),:);
+        res_ss2 = data_ss2(:,rdotCol);
+        [data_cmap, ~] = discretize(res_ss2, edges);
+        data_cmap(res_ss2<=edges(1)) = 1; data_cmap(res_ss2>=edges(end)) = size(cmap,1);
+        scatter(data_ss2(:,rrefCol), data_ss2(:,deltarCol), 15, cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+%         colorbar
+        
+        set(gca, 'FontSize', 16);
+%         ylim([0, 35]);
+%         yticks([0:5:35]);
+%         if ct1==1
+%             xlim([0 5]);
+%             xticks([0:1:5]);
+%         elseif ct1==2
+%             xlim([0 6]);
+%             xticks([0:1:6]);
+%         elseif ct1==3
+%             xlim([0 6]);
+%             xticks([0:1:6]);
+%         end
+        figure2d.Position = [-1313 46 895 820];
+        
+        figure(figure2d_log);
+        subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
+        contourf(log(RREF), log(DELTAR), rdot_response, log(edges), 'LineStyle', 'none');
+        scatter(log(data_ss2(:,rrefCol)), log(data_ss2(:,deltarCol)), 15, cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+        
+        set(gca, 'FontSize', 16);
+%         ylim([0, 4]);
+%         yticks([0:1:4]);
+%         xlim([-1.5 2]);
+%         xticks([-1.5:0.5:2]);
+        figure2d_log.Position = [-1313 46 895 820];
+    end
+end
+% figure(figure2d);
+% cmap_bar = colorbar('eastoutside');
+% caxis(edges([1 end]));
+% cmap_bar.Ticks = [edges(1) edges(end)];
+% cmap_bar.Label.String = 'delta_r';
+% cmap_bar.Label.FontSize = 16;
+
+
+figure;
+colormap(cmap);
+cmap_bar = colorbar('eastoutside');
+caxis(edges([1 end]));
+cmap_bar.Ticks = [edges(1) edges(end)];
+cmap_bar.Label.String = 'rdot';
+cmap_bar.Label.FontSize = 16;
+xlabel('rref (s-1)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
 %% Plot rdot as a function of y, delta_r and rref 
 % deltar as x1, y as x2 and rref as x3
 % x3 is segregated into [0.33 and 0.66] percentiles per column
@@ -691,18 +981,18 @@ cmap_bar.Label.FontSize = 16;
 ylabel('rdot (s-2)', 'FontSize', 14);
 xlabel('deltar (s-1)', 'FontSize', 14);
 
-
-%% Plot rdot as a function of y, delta_r and rref (TO BE USED)
-% deltar as x1, y as x2 and rref as x3
+%% Plot rdot as a function of y, delta_r and rref (NOT TO BE USED)
+% x1 as x1, deltar as x2 and rref as x3
 close all;
 rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
 
 % values for which lines will be plotted
 y_percentile_5_50_95 = quantile(y, [0.05, 0.5, 0.95]);
 rref_percentile_5_50_95 = quantile(rref, [0.05, 0.5, 0.95]);
+deltar_percentile_5_50_95 = quantile(deltar, [0.05, 0.5, 0.95]);
 
 % Untransformed domain
-res = rdot; x1 = deltar; x2 = y; x3 = rref; x4 = light;
+res = rdot; x1 = y; x2 = deltar; x3 = rref; x4 = light;
 
 x3_centers = quantile(x3,[0.25 0.5 0.75]); % values for which rref data is binned
 binwidth = 1.5; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
@@ -716,7 +1006,7 @@ for ct=1:3 % for each light condition
 end
 % x2range = [min(x2_forplot) max(x2_forplot)];
 % x2range = [round(x2range(1)*10)/10 round(max(x2range(2))*10)/10];
-x2range = [0.05 0.35];
+x2range = [0.25 4];
 
 % cmap=brewermap(round(diff(x2range)/0.5),'Set1'); 
 % cmap = jet(round(diff(x2range)/0.1));  
@@ -725,7 +1015,7 @@ edges = round(linspace(x2range(1),x2range(2),size(cmap,1)+1),2); % # edges = # c
 
 % For plotting continuous lines
 % x2quantiles = quantile(x2_forplot,[0.05 0.5 0.95]) 
-x2quantiles = quantile(data_ss(:,yCol),[0.05 0.5 0.95]) % x2 values for which lines are plotted
+x2quantiles = quantile(data_ss(:,deltarCol),[0.05 0.5 0.95]) % x2 values for which lines are plotted
 % deltar_values_cont = 0.2:0.01:4; % deltar values for which lines are plotted
 
 figure2d = figure; hold on;
@@ -738,21 +1028,21 @@ for ct=1:3 % for each light condition
         figure(figure2d);
         subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
         data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,rrefCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,rrefCol) <= x3_centers(ct1)+binwidth/2),:);
-        y_ss2 = data_ss2(:,yCol);
-%         deltar_ss2 = data_ss2(:,deltarCol);
+%         y_ss2 = data_ss2(:,yCol);
+        deltar_ss2 = data_ss2(:,deltarCol);
 %         [min(deltar_ss2) max(deltar_ss2)]
-        [data_cmap, ~] = discretize(y_ss2, edges);
-        data_cmap(y_ss2<=edges(1)) = 1; data_cmap(y_ss2>=edges(end)) = size(cmap,1);
-        scatter(data_ss2(:,deltarCol), data_ss2(:,rdotCol), 10, cmap(data_cmap',:),'filled','o');
+        [data_cmap, ~] = discretize(deltar_ss2, edges);
+        data_cmap(deltar_ss2<=edges(1)) = 1; data_cmap(deltar_ss2>=edges(end)) = size(cmap,1);
+        scatter(data_ss2(:,yCol), data_ss2(:,rdotCol), 10, cmap(data_cmap',:),'filled','o');
         
         % Plot continous lines
 %         x2quantiles = quantile(deltar_ss2,[0.05 0.5 0.95]) % deltar values for which lines are plotted
-        deltar_values_cont = min(data_ss2(:,deltarCol)):0.01:max(data_ss2(:,deltarCol)); % deltar values for which lines are plotted
+        y_values_cont = min(data_ss2(:,yCol)):0.01:max(data_ss2(:,yCol)); % deltar values for which lines are plotted
         dum = [];
         for ct2=1:length(x2quantiles)
-            rdot_response = coeffs(1) + coeffs(2)*log(x2quantiles(ct2)) + coeffs(5)*log(deltar_values_cont) + ...
-                coeffs(6)*log(x3_centers(ct1)) + coeffs(7)*log(deltar_values_cont)*log(x2quantiles(ct2)) + ...
-                + coeffs(8)*log(x3_centers(ct1))*log(deltar_values_cont);
+            rdot_response = coeffs(1) + coeffs(2)*log(y_values_cont) + coeffs(5)*log(x2quantiles(ct2)) + ...
+                coeffs(6)*log(x3_centers(ct1)) + coeffs(7)*log(y_values_cont)*log(x2quantiles(ct2)) + ...
+                + coeffs(8)*log(x3_centers(ct1))*log(x2quantiles(ct2));
             if ct == 2
                 % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
                 rdot_response = rdot_response + coeffs(3);
@@ -761,23 +1051,23 @@ for ct=1:3 % for each light condition
             end
             linecolor = discretize(x2quantiles(ct2), edges);
             dum(ct2) = linecolor;
-            plot(deltar_values_cont, exp(rdot_response),'Color',cmap(linecolor,:),'LineWidth', 2);
+            plot(y_values_cont, exp(rdot_response),'Color',cmap(linecolor,:),'LineWidth', 2);
         end
         display(dum)
         
         set(gca, 'FontSize', 16);
-        ylim([0, 35]);
-        yticks([0:5:35]);
-        if ct1==1
-            xlim([0 2.5]);
-            xticks([0:0.5:2.5]);
-        elseif ct1==2
-            xlim([0 3.3]);
-            xticks([0:0.5:3]);
-        elseif ct1==3
-            xlim([0 4]);
-            xticks([0:0.5:4]);
-        end
+%         ylim([0, 35]);
+%         yticks([0:5:35]);
+%         if ct1==1
+%             xlim([0 2.5]);
+%             xticks([0:0.5:2.5]);
+%         elseif ct1==2
+%             xlim([0 3.3]);
+%             xticks([0:0.5:3]);
+%         elseif ct1==3
+%             xlim([0 4]);
+%             xticks([0:0.5:4]);
+%         end
         
         figure(figure2d_log);
         subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
@@ -827,6 +1117,270 @@ cmap_bar.Label.String = 'y';
 cmap_bar.Label.FontSize = 16;
 ylabel('rdot (s-2)', 'FontSize', 14);
 xlabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+
+
+%% Plot rdot as a function of y, delta_r and rref (FINAL - TO BE USED)
+% deltar as x1, y as x2 and rref as x3
+close all;
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+
+% values for which lines will be plotted
+% y_percentile_5_50_95 = quantile(y, [0.05, 0.5, 0.95]);
+% rref_percentile_5_50_95 = quantile(rref, [0.05, 0.5, 0.95]);
+% 
+% Untransformed domain
+res = rdot; x1 = deltar; x2 = y; x3 = rref; x4 = light;
+
+x3_centers = quantile(x3,[0.15 0.5 0.85]);% quantile(x3,[0.25 0.5 0.75]); % values for which rref data is binned
+binwidth = 1; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
+
+x2_forplot = [];
+for ct=1:3 % for each light condition
+    for ct1=1:length(x3_centers)  % for each x3
+        dummy = x2(data_ss(:,lightCol) == ct & (data_ss(:,rrefCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,rrefCol) <= x3_centers(ct1)+binwidth/2));
+        x2_forplot = [x2_forplot; dummy]; 
+    end
+end
+% x2range = [min(x2_forplot) max(x2_forplot)];
+% x2range = [round(x2range(1)*10)/10 round(max(x2range(2))*10)/10];
+x2range = [0.05 0.35]; % y range
+
+% cmap=brewermap(round(diff(x2range)/0.5),'Set1'); 
+% cmap = jet(round(diff(x2range)/0.1));  
+cmap = [0.8500, 0.3250, 0.0980; 0, 0.4470, 0.7410; 0.4660, 0.6740, 0.1880];
+% cmap = [253,208,162; 253,174,107; 253,141,60; 241,105,19; 217,72,1; 166,54,3]./255;
+edges = round(linspace(x2range(1),x2range(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+% For plotting continuous lines
+% x2quantiles = quantile(x2_forplot,[0.05 0.5 0.95]) 
+x2quantiles = quantile(data_ss(:,yCol),[0.05 0.5 0.95]); % x2 values for which lines are plotted
+x2quantiles = [0.1 0.2 0.3]; %quantile(data_ss(:,yCol),[0.05 0.5 0.95]) % x2 values for which lines are plotted
+% deltar_values_cont = 0.2:0.01:4; % deltar values for which lines are plotted
+
+figure2d = figure; hold on;
+colormap(cmap);
+
+figure2d_log = figure; hold on;
+colormap(cmap);
+for ct=3%1:3 % for each light condition
+    for ct1=2%1:length(x3_centers)  % for each x3
+        figure(figure2d); hold on;
+%         subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
+        data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,rrefCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,rrefCol) <= x3_centers(ct1)+binwidth/2),:);
+        y_ss2 = data_ss2(:,yCol);
+%         deltar_ss2 = data_ss2(:,deltarCol);
+%         [min(deltar_ss2) max(deltar_ss2)]
+        [data_cmap, ~] = discretize(y_ss2, edges);
+        data_cmap(y_ss2<=edges(1)) = 1; data_cmap(y_ss2>=edges(end)) = size(cmap,1);
+        scatter(data_ss2(:,deltarCol), data_ss2(:,rdotCol), 10, cmap(data_cmap',:),'filled','o');
+        
+        % Plot continous lines
+%         x2quantiles = quantile(deltar_ss2,[0.05 0.5 0.95]) % deltar values for which lines are plotted
+        deltar_values_cont = min(data_ss2(:,deltarCol)):0.01:max(data_ss2(:,deltarCol)); % deltar values for which lines are plotted
+        dum = [];
+        for ct2=1:length(x2quantiles)
+            rdot_response = coeffs(1) + coeffs(2)*log(x2quantiles(ct2)) + coeffs(5)*log(deltar_values_cont) + ...
+                coeffs(6)*log(x3_centers(ct1)) + coeffs(7)*log(deltar_values_cont)*log(x2quantiles(ct2)) + ...
+                + coeffs(8)*log(x3_centers(ct1))*log(deltar_values_cont);
+            if ct == 2
+                % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+                rdot_response = rdot_response + coeffs(3);
+            elseif ct == 3
+                rdot_response = rdot_response + coeffs(4);
+            end
+            linecolor = discretize(x2quantiles(ct2), edges);
+            dum(ct2) = linecolor;
+            plot(deltar_values_cont, exp(rdot_response),'Color',cmap(linecolor,:),'LineWidth', 2);
+        end
+        display(dum)
+        
+        set(gca, 'FontSize', 16);
+        ylim([0, 35]);
+        yticks([0:5:35]);
+        if ct1==1
+            xlim([0 2.5]);
+            xticks([0:0.5:2.5]);
+        elseif ct1==2
+            xlim([0 3.3]);
+            xticks([0:0.5:3]);
+        elseif ct1==3
+            xlim([0 4]);
+            xticks([0:0.5:4]);
+        end
+%         figure2d.Position = [-1313 46 895 820];
+
+        
+        figure(figure2d_log); hold on;
+%         subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
+        data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,rrefCol) >= x3_centers(ct1)-binwidth/2 & data_ss(:,rrefCol) <= x3_centers(ct1)+binwidth/2),:);
+        y_ss2 = data_ss2(:,yCol);
+        [data_cmap, ~] = discretize(y_ss2, edges);
+        data_cmap(y_ss2<=edges(1)) = 1; data_cmap(y_ss2>=edges(end)) = size(cmap,1);
+        scatter(log(data_ss2(:,deltarCol)), log(data_ss2(:,rdotCol)), 10, cmap(data_cmap',:),'filled','o');
+        
+        % Plot continous lines
+        deltar_values_cont = min(data_ss2(:,deltarCol)):0.01:max(data_ss2(:,deltarCol)); % deltar values for which lines are plotted
+        for ct2=1:length(x2quantiles)
+            rdot_response = coeffs(1) + coeffs(2)*log(x2quantiles(ct2)) + coeffs(5)*log(deltar_values_cont) + ...
+                coeffs(6)*log(x3_centers(ct1)) + coeffs(7)*log(deltar_values_cont)*log(x2quantiles(ct2)) + ...
+                + coeffs(8)*log(x3_centers(ct1))*log(deltar_values_cont);
+            if ct == 2
+                % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+                rdot_response = rdot_response + coeffs(3);
+            elseif ct == 3
+                rdot_response = rdot_response + coeffs(4);
+            end
+            linecolor = discretize(x2quantiles(ct2), edges);
+            plot(log(deltar_values_cont), rdot_response,'Color',cmap(linecolor,:),'LineWidth', 2);
+        end
+        
+        set(gca, 'FontSize', 16);
+        ylim([1, 4]);
+        yticks([1:1:4]);
+        xlim([-1.5 1.5]);
+        xticks([-1.5:0.5:1.5]);
+%         figure2d_log.Position = [-1313 46 895 820];
+
+    end
+end
+% figure(figure2d);
+% cmap_bar = colorbar('eastoutside');
+% caxis(edges([1 end]));
+% cmap_bar.Ticks = [edges(1) edges(end)];
+% cmap_bar.Label.String = 'delta_r';
+% cmap_bar.Label.FontSize = 16;
+
+
+figure;
+colormap(cmap);
+cmap_bar = colorbar('eastoutside');
+caxis(edges([1 end]));
+cmap_bar.Ticks = [edges(1) x2quantiles edges(end)];
+cmap_bar.Label.String = 'y';
+cmap_bar.Label.FontSize = 16;
+ylabel('rdot (s-2)', 'FontSize', 14);
+xlabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+%% Plot rdot as a function of rref (FINAL TO BE USED)
+% rref as x1
+close all;
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+
+% values for which lines will be plotted
+y_chosen = 0.22; %quantile(y, 0.5); % mean(y)
+y_bin = 0.06; %mean(y) std(y)
+deltar_chosen = 1.67; quantile(deltar, 0.5); %mean(delta_r) std(delta_r)
+deltar_bin = 0.8;
+
+% Untransformed domain
+res = rdot; x1 = rref;
+
+% x3_centers = quantile(x3,[0.25 0.5 0.75]); % values for which rref data is binned
+% binwidth = 0.05; % data within [x3_center(1)-binwidth/2 x3_center(1)+binwidth/2] is considered to be at x3_center(1)
+
+x1_forplot = [];
+for ct=1:3 % for each light condition
+    dummy = x1(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= y_chosen-y_bin/2 & data_ss(:,yCol) <= y_chosen+y_bin/2) & ...
+                                           (data_ss(:,deltarCol) >= deltar_chosen-deltar_bin/2 & data_ss(:,deltarCol) <= deltar_chosen+deltar_bin/2));
+    x1_forplot = [x1_forplot; dummy];
+end
+x1range = [min(x1_forplot) max(x1_forplot)];
+x1range = [floor(x1range(1)*10)/10 round(max(x1range(2))*10)/10];
+rref_values_cont = x1range(1):0.1:x1range(2);
+% x2range = [1 5.5];
+
+% cmap=brewermap(round(diff(x2range)/0.5),'Set1'); 
+% cmap = jet(round(diff(x2range)/0.1));  
+cmap = [0.8500, 0.3250, 0.0980; 0, 0.4470, 0.7410; 0.4660, 0.6740, 0.1880];
+edges = round(linspace(x2range(1),x2range(2),size(cmap,1)+1),2); % # edges = # color bins + 1
+
+% For plotting continuous lines
+% x2quantiles = quantile(x2_forplot,[0.05 0.5 0.95]) 
+% x2quantiles = quantile(data_ss(:,rrefCol),[0.05 0.5 0.95]) % x2 values for which lines are plotted
+ % deltar values for which lines are plotted
+
+figure2d = figure; hold on;
+colormap(cmap);
+
+figure2d_log = figure; hold on;
+colormap(cmap);
+for ct=3%1:3 % for each light condition
+    
+        figure(figure2d); hold on;
+%         subplot(3, 1, ct); hold on;
+        data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= y_chosen-y_bin/2 & data_ss(:,yCol) <= y_chosen+y_bin/2) & ...
+                                           (data_ss(:,deltarCol) >= deltar_chosen-deltar_bin/2 & data_ss(:,deltarCol) <= deltar_chosen+deltar_bin/2),:);
+%         rref_ss2 = data_ss2(:,rrefCol);
+%         [data_cmap, ~] = discretize(rref_ss2, edges);
+%         data_cmap(rref_ss2<=edges(1)) = 1; data_cmap(rref_ss2>=edges(end)) = size(cmap,1);
+        scatter(data_ss2(:,rrefCol), data_ss2(:,rdotCol), 10,'filled','o');
+        
+        % Plot continous lines
+        
+        rdot_response = coeffs(1) + coeffs(2)*log(y_chosen) + coeffs(5)*log(deltar_chosen) + ...
+            coeffs(6)*log(rref_values_cont) + coeffs(7)*log(y_chosen)*log(deltar_chosen) + ...
+            + coeffs(8)*log(deltar_chosen)*log(rref_values_cont);
+        if ct == 2
+            % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+            rdot_response = rdot_response + coeffs(3);
+        elseif ct == 3
+            rdot_response = rdot_response + coeffs(4);
+        end
+%         linecolor = discretize(x2quantiles(ct2), edges);
+        plot(rref_values_cont, exp(rdot_response),'Color',[0 0 0],'LineWidth', 2);
+        
+        set(gca, 'FontSize', 16);
+        ylim([5, 20]);
+        yticks([5:5:20]);
+%         if ct1==1
+            xlim([1.5 5]);
+            xticks([1:1:5]);
+%         elseif ct1==2
+%             xlim([0 6]);
+%             xticks([0:1:6]);
+%         elseif ct1==3
+%             xlim([0 6]);
+%             xticks([0:1:6]);
+%         end
+%         figure2d.Position = [326    42   335   954];
+        
+        figure(figure2d_log); hold on;
+%         subplot(3, 1, ct); hold on;
+        data_ss2 = data_ss(data_ss(:,lightCol) == ct & (data_ss(:,yCol) >= y_chosen-y_bin/2 & data_ss(:,yCol) <= y_chosen+y_bin/2) & ...
+                                           (data_ss(:,deltarCol) >= deltar_chosen-deltar_bin/2 & data_ss(:,deltarCol) <= deltar_chosen+deltar_bin/2),:);
+        scatter(log(data_ss2(:,rrefCol)), log(data_ss2(:,rdotCol)), 10,'filled','o');
+        
+        % Plot continous lines
+        plot(log(rref_values_cont), rdot_response,'Color',[0 0 0],'LineWidth', 2);
+        
+        
+        set(gca, 'FontSize', 16);
+        ylim([1.5 3]);
+        yticks([1.5:0.5:3]);
+        xlim([0.5 1.75]);
+        xticks([0.5:0.5:1.5]);
+%         figure2d_log.Position = [667    34   335   961];
+end
+% figure(figure2d);
+% cmap_bar = colorbar('eastoutside');
+% caxis(edges([1 end]));
+% cmap_bar.Ticks = [edges(1) edges(end)];
+% cmap_bar.Label.String = 'delta_r';
+% cmap_bar.Label.FontSize = 16;
+
+
+figure;
+% colormap(cmap);
+% cmap_bar = colorbar('eastoutside');
+% caxis(edges([1 end]));
+% cmap_bar.Ticks = [edges(1) edges(end)];
+% cmap_bar.Label.String = 'rref';
+% cmap_bar.Label.FontSize = 16;
+ylabel('rdot (s-2)', 'FontSize', 14);
+xlabel('rref (s-1)', 'FontSize', 14);
 set(gca, 'FontSize', 16);
 
 %% Plot rdot as a function of y, delta_r and rref (TO BE USED)
@@ -907,16 +1461,17 @@ for ct=1:3 % for each light condition
         set(gca, 'FontSize', 16);
         ylim([0, 35]);
         yticks([0:5:35]);
-%         if ct1==1
-%             xlim([0 2.5]);
-%             xticks([0:0.5:2.5]);
-%         elseif ct1==2
-%             xlim([0 3.3]);
-%             xticks([0:0.5:3]);
-%         elseif ct1==3
-%             xlim([0 4]);
-%             xticks([0:0.5:4]);
-%         end
+        if ct1==1
+            xlim([0 5]);
+            xticks([0:1:5]);
+        elseif ct1==2
+            xlim([0 6]);
+            xticks([0:1:6]);
+        elseif ct1==3
+            xlim([0 6]);
+            xticks([0:1:6]);
+        end
+        figure2d.Position = [-1313 46 895 820];
         
         figure(figure2d_log);
         subplot(3, length(x3_centers), (ct-1)*length(x3_centers)+ct1); hold on;
@@ -941,12 +1496,13 @@ for ct=1:3 % for each light condition
             linecolor = discretize(x2quantiles(ct2), edges);
             plot(log(deltar_values_cont), rdot_response,'Color',cmap(linecolor,:),'LineWidth', 2);
         end
-%         
-%         set(gca, 'FontSize', 16);
-%         ylim([1, 4]);
-%         yticks([1:1:4]);
-%         xlim([-1.5 1.5]);
-%         xticks([-1.5:0.5:1.5]);
+        
+        set(gca, 'FontSize', 16);
+        ylim([0, 4]);
+        yticks([0:1:4]);
+        xlim([-1.5 2]);
+        xticks([-1.5:0.5:2]);
+        figure2d_log.Position = [-1313 46 895 820];
     end
 end
 % figure(figure2d);
@@ -966,6 +1522,389 @@ cmap_bar.Label.String = 'rref';
 cmap_bar.Label.FontSize = 16;
 ylabel('rdot (s-2)', 'FontSize', 14);
 xlabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+%% Mean accleration plot (FINAL - TO BE USED) - with rref and y on two axes and for a fixed deltar
+% close all;
+ameanCol = 17;
+ameanCol = 18;
+
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+chosen_deltar = 1;%[1.6 2.4]%quantile(deltar,[0.25 0.5 0.75]);
+rref_grid = 1:0.25:5;%quantile(rref,[0.05 0.95])
+y_grid = 0.1:0.025:0.35;%quantile(y,[0.05 0.95])
+rdot_response1 = nan(length(y_grid),length(rref_grid));
+Amean_response2 = nan(length(y_grid),length(rref_grid)); % from rdot model
+Amean_predicted = nan(length(y_grid),length(rref_grid)); % from Amean model
+% coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+% coeffs_Amean = [1.71368183  0.46295979  0.04482469  0.14650472  0.44938972 -1.53883634 -0.55715188 0];
+
+
+for ct_y=1:length(y_grid)
+    for ct_rref=1:length(rref_grid)
+        y0 = y_grid(ct_y); t0 = 0; thisRref = rref_grid(ct_rref);
+        thisDeltar = chosen_deltar;
+        r0 = thisRref - chosen_deltar;
+        if r0 > 0
+            V0 = r0*y0;
+            tspan = [0:0.01:1.5];
+            ystart = [y0 V0]; 
+            % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+            log_rdot = coeffs(1) + coeffs(2)*log(y0) + coeffs(4) + coeffs(5)*log(thisDeltar) + ...
+                coeffs(6)*log(thisRref) + coeffs(7)*log(y0)*log(thisDeltar) + ...
+                + coeffs(8)*log(thisRref)*log(thisDeltar);
+            rdot = exp(log_rdot);
+            [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, ystart);
+            r = y(:,2)./y(:,1);
+            tv_interp = interp1(r,[t y],thisRref);
+            if tv_interp(2) > 0 && r(end) >= thisRref
+                deltat = tv_interp(1); deltaV = tv_interp(3)-V0;
+                Amean_response2(ct_y, ct_rref) = deltaV/deltat;
+                
+                rdot_response1(ct_y, ct_rref) = rdot;
+                
+%                 log_Amean_pred = coeffs_Amean(1) + coeffs_Amean(2)*log(y0) + coeffs_Amean(4) + coeffs_Amean(5)*log(thisDeltar) + ...
+%                 coeffs_Amean(6)*log(chosen_rref) + coeffs_Amean(7)*log(y0)*log(thisDeltar) + ...
+%                 + coeffs_Amean(8)*log(chosen_rref)*log(thisDeltar);
+%                 Amean_predicted(ct_y, ct_deltar) = exp(log_Amean_pred);
+            end
+            
+            
+            
+            
+        else
+            continue;
+        end
+    end
+end
+
+% Collect data points for plotting
+binwidth = 0.2; 
+data_ss2 = data_ss(data_ss(:,lightCol) == 3 & (data_ss(:,deltarCol) >= chosen_deltar-binwidth/2 & data_ss(:,deltarCol) <= chosen_deltar+binwidth/2),:);
+% data_ss2 = data_ss((data_ss(:,deltarCol) >= chosen_deltar-binwidth/2 & data_ss(:,deltarCol) <= chosen_deltar+binwidth/2),:);
+rdot = data_ss2(:,rdotCol); y = data_ss2(:,yCol); light = data_ss2(:,lightCol); deltar = data_ss2(:,deltarCol); rref = data_ss2(:,rrefCol); amean = data_ss2(:,ameanCol);
+
+% managing colorbar
+% rdot_range = [8 25];
+rdot_range = [5 20];
+nColors = round(diff(rdot_range)/1);
+rdot_cmap = jet(2*nColors);
+rdot_cmap = rdot_cmap(round(nColors/2):round(nColors/2)+nColors-1,:);
+rdot_edges = round(linspace(rdot_range(1),rdot_range(2),size(rdot_cmap,1)+1),2); % # edges = # color bins + 1
+
+% amean_range = [0 10];
+amean_range = [0 2.5];
+nColors = round(diff(amean_range)/0.5);
+amean_cmap = jet(2*nColors);
+amean_cmap = amean_cmap(round(nColors/2):round(nColors/2)+nColors-1,:);
+% amean_cmap = jet(round(diff(amean_range)/0.5));  
+amean_edges = round(linspace(amean_range(1),amean_range(2),size(amean_cmap,1)+1),2); % # edges = # color bins + 1
+
+[Y, RREF] = meshgrid(rref_grid, y_grid);
+rdot_fig = figure; hold on;
+% subplot(1,2,1);
+colormap(rdot_cmap);
+[~,c1] = contourf(RREF, Y, rdot_response1, rdot_edges, 'LineStyle', 'none');
+
+[data_cmap, ~] = discretize(rdot, rdot_edges);
+data_cmap(rdot<=rdot_edges(1)) = 1; data_cmap(rdot>=rdot_edges(end)) = size(rdot_cmap,1);
+scatter(y, rref, 25, rdot_cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+
+title('rdot (s-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('rref (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+xlim([0.1 0.35]);
+xticks([0.1:0.05:0.35]);
+ylim([2 5]);
+yticks([2:0.5:5]);
+
+cmap_bar = colorbar('eastoutside');
+caxis(rdot_edges([1 end]));
+cmap_bar.Ticks = [rdot_edges(1) rdot_edges(end)];
+% cmap_bar.Label.String = 'rdot';
+cmap_bar.Label.FontSize = 16;
+
+amean_fig = figure; hold on;
+% subplot(1,2,2) % rdot=f(y, deltar)
+colormap(amean_cmap);
+contourf(RREF, Y, Amean_response2, amean_edges, 'LineStyle', 'none');
+
+[data_cmap, ~] = discretize(amean, amean_edges);
+data_cmap(amean<=amean_edges(1)) = 1; data_cmap(amean>=amean_edges(end)) = size(amean_cmap,1);
+scatter(y, rref, 25, amean_cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+
+title('Amean (ms-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('rref (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+xlim([0.1 0.35]);
+xticks([0.1:0.05:0.35]);
+ylim([2 5]);
+yticks([2:0.5:5]);
+
+cmap_bar = colorbar('eastoutside');
+caxis(amean_edges([1 end]));
+cmap_bar.Ticks = [amean_edges(1) amean_edges(end)];
+% cmap_bar.Label.String = 'rdot';
+cmap_bar.Label.FontSize = 16;
+
+%% Mean accleration plot (3D data points - TO BE USED) - with rref, y and delta_r on three axes
+close all;
+ameanCol = 17;
+ameanCol = 18;
+
+% rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+
+% Collect data points for plotting
+binwidth = 0.2; 
+data_ss2 = data_ss(data_ss(:,lightCol) == 3 & data_ss(:,isriseCol) == 1,:);
+rdot = data_ss2(:,rdotCol); y = data_ss2(:,yCol); light = data_ss2(:,lightCol); deltar = data_ss2(:,deltarCol); rref = data_ss2(:,rrefCol); amean = data_ss2(:,ameanCol);
+
+% quantile(amean,[0.05, 0.5, 0.95])
+% figure;
+% histogram(amean);
+
+amean_range = [0 2.5];
+nColors = round(diff(amean_range)/0.5);
+amean_cmap = jet(2*nColors);
+amean_cmap = amean_cmap(round(nColors/2):round(nColors/2)+nColors-1,:);
+% amean_cmap = jet(round(diff(amean_range)/0.5));  
+amean_edges = round(linspace(amean_range(1),amean_range(2),size(amean_cmap,1)+1),2); % # edges = # color bins + 1
+
+amean_fig = figure; hold on;
+% subplot(1,2,2) % rdot=f(y, deltar)
+colormap(amean_cmap);
+
+[data_cmap, ~] = discretize(amean, amean_edges);
+data_cmap(amean<=amean_edges(1)) = 1; data_cmap(amean>=amean_edges(end)) = size(amean_cmap,1);
+scatter3(y, rref, deltar, 25, amean_cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+
+% title('Amean (ms-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('rref (s-1)', 'FontSize', 14);
+zlabel('delta r (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+% xlim([0.1 0.35]);
+% xticks([0.1:0.05:0.35]);
+% ylim([2 5]);
+% yticks([2:0.5:5]);
+
+cmap_bar = colorbar('eastoutside');
+caxis(amean_edges([1 end]));
+cmap_bar.Ticks = [amean_edges(1) amean_edges(end)];
+cmap_bar.Label.String = 'Amean (ms-2)';
+cmap_bar.Label.FontSize = 16;
+
+% figure;
+% scatter(log(y), log(rref), 25, amean_cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+% ylim([-3 4]);
+
+%% Mean accleration plot (TO BE USED) - with deltar and y on two axes and for a fixed rref
+% close all;
+% ameanCol = 17;
+ameanCol = 18;
+
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+chosen_rref = 2.2; %quantile(rref,[0.5]);
+deltar_grid = 0.5:0.25:3;%quantile(rref,[0.05 0.95])
+y_grid = 0.1:0.025:0.35;%quantile(y,[0.05 0.95])
+rdot_response1 = nan(length(y_grid),length(deltar_grid));
+Amean_response2 = nan(length(y_grid),length(deltar_grid)); % from rdot model
+Amean_predicted = nan(length(y_grid),length(deltar_grid)); % from Amean model
+% coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+% coeffs_Amean = [1.71368183  0.46295979  0.04482469  0.14650472  0.44938972 -1.53883634 -0.55715188 0];
+
+
+for ct_y=1:length(y_grid)
+    for ct_deltar=1:length(deltar_grid)
+        y0 = y_grid(ct_y); t0 = 0; 
+        thisDeltar = deltar_grid(ct_deltar);
+        thisRref = chosen_rref;
+        r0 = thisRref - thisDeltar;
+        if r0 > 0
+            V0 = r0*y0;
+            tspan = [0:0.01:1];
+            ystart = [y0 V0]; 
+            % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+            log_rdot = coeffs(1) + coeffs(2)*log(y0) + coeffs(4) + coeffs(5)*log(thisDeltar) + ...
+                coeffs(6)*log(thisRref) + coeffs(7)*log(y0)*log(thisDeltar) + ...
+                + coeffs(8)*log(thisRref)*log(thisDeltar);
+            rdot = exp(log_rdot);
+            [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, ystart);
+            r = y(:,2)./y(:,1);
+            tv_interp = interp1(r,[t y],thisRref);
+            if tv_interp(2) > 0 && r(end) >= thisRref
+                deltat = tv_interp(1); deltaV = tv_interp(3)-V0;
+                Amean_response2(ct_y, ct_deltar) = deltaV/deltat;
+                
+                rdot_response1(ct_y, ct_deltar) = rdot;
+                
+%                 log_Amean_pred = coeffs_Amean(1) + coeffs_Amean(2)*log(y0) + coeffs_Amean(4) + coeffs_Amean(5)*log(thisDeltar) + ...
+%                 coeffs_Amean(6)*log(chosen_rref) + coeffs_Amean(7)*log(y0)*log(thisDeltar) + ...
+%                 + coeffs_Amean(8)*log(chosen_rref)*log(thisDeltar);
+%                 Amean_predicted(ct_y, ct_deltar) = exp(log_Amean_pred);
+            end
+            
+            
+            
+            
+        else
+            continue;
+        end
+    end
+end
+
+% Collect data points for plotting
+binwidth = 0.5; 
+data_ss2 = data_ss(data_ss(:,lightCol) == 3 & (data_ss(:,rrefCol) >= chosen_rref-binwidth/2 & data_ss(:,rrefCol) <= chosen_rref+binwidth/2),:);
+% data_ss2 = data_ss((data_ss(:,deltarCol) >= chosen_deltar-binwidth/2 & data_ss(:,deltarCol) <= chosen_deltar+binwidth/2),:);
+rdot = data_ss2(:,rdotCol); y = data_ss2(:,yCol); light = data_ss2(:,lightCol); deltar = data_ss2(:,deltarCol); rref = data_ss2(:,rrefCol); amean = data_ss2(:,ameanCol);
+
+% managing colorbar
+% rdot_range = [8 25];
+rdot_range = [5 20];
+nColors = round(diff(rdot_range)/1);
+rdot_cmap = jet(2*nColors);
+rdot_cmap = rdot_cmap(round(nColors/2):round(nColors/2)+nColors-1,:);
+rdot_edges = round(linspace(rdot_range(1),rdot_range(2),size(rdot_cmap,1)+1),2); % # edges = # color bins + 1
+
+% amean_range = [0 10];
+amean_range = [0 2.5];
+nColors = round(diff(amean_range)/0.5);
+amean_cmap = jet(2*nColors);
+amean_cmap = amean_cmap(round(nColors/2):round(nColors/2)+nColors-1,:);
+% amean_cmap = jet(round(diff(amean_range)/0.5));  
+amean_edges = round(linspace(amean_range(1),amean_range(2),size(amean_cmap,1)+1),2); % # edges = # color bins + 1
+
+[Y, DELTAR] = meshgrid(deltar_grid, y_grid);
+rdot_fig = figure; hold on;
+% subplot(1,2,1);
+colormap(rdot_cmap);
+[~,c1] = contourf(DELTAR, Y, rdot_response1, rdot_edges, 'LineStyle', 'none');
+
+[data_cmap, ~] = discretize(rdot, rdot_edges);
+data_cmap(rdot<=rdot_edges(1)) = 1; data_cmap(rdot>=rdot_edges(end)) = size(rdot_cmap,1);
+scatter(y, deltar, 25, rdot_cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+
+title('rdot (s-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+% xlim([0.1 0.35]);
+% xticks([0.1:0.05:0.35]);
+% ylim([2 5]);
+% yticks([2:0.5:5]);
+
+cmap_bar = colorbar('eastoutside');
+caxis(rdot_edges([1 end]));
+cmap_bar.Ticks = [rdot_edges(1) rdot_edges(end)];
+% cmap_bar.Label.String = 'rdot';
+cmap_bar.Label.FontSize = 16;
+
+amean_fig = figure; hold on;
+% subplot(1,2,2) % rdot=f(y, deltar)
+colormap(amean_cmap);
+contourf(DELTAR, Y, Amean_response2, amean_edges, 'LineStyle', 'none');
+
+[data_cmap, ~] = discretize(amean, amean_edges);
+data_cmap(amean<=amean_edges(1)) = 1; data_cmap(amean>=amean_edges(end)) = size(amean_cmap,1);
+scatter(y, deltar, 25, amean_cmap(data_cmap',:),'filled','o','MarkerEdgeColor',[0 .5 .5]);
+
+title('Amean (ms-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+% xlim([0.1 0.35]);
+% xticks([0.1:0.05:0.35]);
+% ylim([2 5]);
+% yticks([2:0.5:5]);
+
+cmap_bar = colorbar('eastoutside');
+caxis(amean_edges([1 end]));
+cmap_bar.Ticks = [amean_edges(1) amean_edges(end)];
+% cmap_bar.Label.String = 'rdot';
+cmap_bar.Label.FontSize = 16;
+
+%% Mean accleration plot (TO BE USED) - with deltar and y on two axes and for a fixed rref
+rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
+chosen_rref = quantile(rref,[0.75]);
+deltar_grid = 0.5:0.05:3.7;%quantile(deltar,[0.05 0.95])
+y_grid = 0.05:0.025:0.35;%quantile(y,[0.05 0.95])
+rdot_response1 = nan(length(y_grid),length(deltar_grid));
+Amean_response2 = nan(length(y_grid),length(deltar_grid)); % from rdot model
+Amean_predicted = nan(length(y_grid),length(deltar_grid)); % from Amean model
+% coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+coeffs_Amean = [1.71368183  0.46295979  0.04482469  0.14650472  0.44938972 -1.53883634 -0.55715188 0];
+
+
+for ct_y=1:length(y_grid)
+    for ct_deltar=1:length(deltar_grid)
+        y0 = y_grid(ct_y); t0 = 0; thisDeltar = deltar_grid(ct_deltar);
+        r0 = chosen_rref - thisDeltar;
+        if r0 > 0
+            V0 = r0*y0;
+            tspan = [0:0.01:1];
+            ystart = [y0 V0]; 
+            % coeffs = [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+            log_rdot = coeffs(1) + coeffs(2)*log(y0) + coeffs(4) + coeffs(5)*log(thisDeltar) + ...
+                coeffs(6)*log(chosen_rref) + coeffs(7)*log(y0)*log(thisDeltar) + ...
+                + coeffs(8)*log(chosen_rref)*log(thisDeltar);
+            rdot = exp(log_rdot);
+            [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, ystart);
+            r = y(:,2)./y(:,1);
+            tv_interp = interp1(r,[t y],chosen_rref);
+            if tv_interp(2) > 0 && r(end) >= chosen_rref
+                deltat = tv_interp(1); deltaV = tv_interp(3)-V0;
+                Amean_response2(ct_y, ct_deltar) = deltaV/deltat;
+                
+                log_Amean_pred = coeffs_Amean(1) + coeffs_Amean(2)*log(y0) + coeffs_Amean(4) + coeffs_Amean(5)*log(thisDeltar) + ...
+                coeffs_Amean(6)*log(chosen_rref) + coeffs_Amean(7)*log(y0)*log(thisDeltar) + ...
+                + coeffs_Amean(8)*log(chosen_rref)*log(thisDeltar);
+                Amean_predicted(ct_y, ct_deltar) = exp(log_Amean_pred);
+            end
+            
+            rdot_response1(ct_y, ct_deltar) = rdot;
+            
+            
+        else
+            continue;
+        end
+    end
+end
+[Y, DELTAR] = meshgrid(deltar_grid, y_grid);
+figure;
+subplot(1,2,1) 
+contourf(DELTAR, Y, rdot_response1, 10,'ShowText','on');
+title('rdot (s-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+subplot(1,2,2) % rdot=f(y, deltar)
+contourf(DELTAR, Y, Amean_response2, 10,'ShowText','on');
+% contourf(Amean_response2, Y, DELTAR, 10,'ShowText','on');
+title('Amean (ms-2)', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+
+figure;
+subplot(1,2,1) 
+contourf(DELTAR, Y, Amean_response2, 10,'ShowText','on');
+% contourf(Amean_response2, Y, DELTAR, 10,'ShowText','on');
+title('Amean (ms-2) from rdot model', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+
+subplot(1,2,2) % rdot=f(y, deltar)
+contourf(DELTAR, Y, Amean_predicted, 10,'ShowText','on');
+% contourf(Amean_response2, Y, DELTAR, 10,'ShowText','on');
+title('Amean (ms-2) from Amean model', 'FontSize', 14);
+xlabel('y (m)', 'FontSize', 14);
+ylabel('deltar (s-1)', 'FontSize', 14);
 set(gca, 'FontSize', 16);
 
 %% Plot rdot as a function of y, delta_r and rref 
