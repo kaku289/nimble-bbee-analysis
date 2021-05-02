@@ -1,4 +1,4 @@
-%% This file performs a "dirty" analysis on preliminary data sent by Dr. Baird for honeybee approaches
+%% This file performs the analysis on data sent by Dr. Baird for honeybee approaches
 
 % to add definition of classes being used for this analysis
 addpath('./lib/li_analysis');
@@ -228,9 +228,12 @@ for ct_factor=1:length(factors)
           ', # tracks with >1 r*: ' num2str(N1)]);
 end
 
+data_write(:,9) = ones(length(data_write),1);
+data_write(data_write(:,4) == 4 | data_write(:,4) == 11,9) = 0;
+
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'flightID','setID','day','patternnum','y','r','v','threshold'});
+        'VariableNames',{'flightID','setID','day','patternnum','y','r','v','threshold','expansioncue'});
     writetable(T,r_file);
 end
 
@@ -345,9 +348,234 @@ box off
 axis tight
 legend('Static','Expanding','Contracting','location','northeast')
 legend boxoff
-%% Plot r* vs y*
+
+%% Extract dataset only for static patterns
+clc; close all;
+clear;
+
+inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+load(inputFile);
 
 landing_tracks = [landingTracks{:}];
+landingTracks = landing_tracks([landing_tracks.patternnum] <= 11);
+
+% Loading data and collecting segments with rref
+factors = [0.25:0.25:2.5];
+chosen_fac = 1;
+
+data = struct.empty;
+clear dummy;
+
+state_LDF = [landingTracks.state_LDF];
+rrefSegs = [state_LDF.rrefSegments];
+
+landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+
+
+% Finding # of "tracks" (state LDFs) that contain rref segments
+% for each factor
+N = zeros(1, length(factors));
+for ct_fac = 1:length(factors)
+    factor = factors(ct_fac);
+    indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).intervals_ti),state_LDF);
+    N(ct_fac) = sum(indices);
+end
+
+% Display
+disp(['# of state LDFs containing rrefs for different factors: ' num2str(N)]);
+
+% For chosen factor, collect all tracks that do contain
+% non-empty rref segments
+indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti), state_LDF);
+dummy.tracks_fac = state_LDF(indices);
+dummy.landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+data = [data; dummy];
+
+%% Create Trajectories' views with constant-r segments highlighted
+close all;
+trajPlot = figure; hold on;
+skip_step = 1;
+N = 0;
+for ct=1:length(data)
+    for ct1 = 1:skip_step:length(data(ct).tracks_fac)
+        xyz = data(ct).tracks_fac(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+
+%         if ~any(xyz(:,2)>-5e-3)
+    %         plot3(xyz(:,1), xyz(:,2), xyz(:,3),'Color',[0 97 205]./255); 
+%             plot3(xyz(:,1), -1*xyz(:,2), xyz(:,3),'Color',[117 153 242]./255); 
+            plot3(xyz(:,1), -1*xyz(:,2), xyz(:,3),'Color',[252,187,161]./255); 
+    %         plot3(xyz(:,1), xyz(:,2), xyz(:,3));
+%         else
+%             disp(true)
+%         end
+    end
+    N = N + length(1:skip_step:length(data(ct).tracks_fac));
+end
+
+for ct=1:length(data)
+    for ct1 = 1:skip_step:length(data(ct).tracks_fac)
+        intervals = data(ct).tracks_fac(ct1).rrefSegments(...
+            abs([data(ct).tracks_fac(ct1).rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti;
+        for ct2 = 1:size(intervals,1)
+            xyz4rref = data(ct).tracks_fac(ct1).filteredState(intervals(ct2,1):intervals(ct2,2),[2 3 4]); % trajectory used for estimating r*
+            plot3(xyz4rref(:,1), -1*xyz4rref(:,2), xyz4rref(:,3),'Color',[215 48 39]./255, 'Linewidth', 1);
+%             plot3(xyz4rref(:,1), -1*xyz4rref(:,2), xyz4rref(:,3),'Color',[239 38 38]./255, 'Linewidth', 1);
+        end
+    end
+end
+
+% % Landing Disc
+% [X,Y,Z] = cylinder(treatment.landingDiscs(1).radius);
+radius = 0.60; % verify this
+
+figure(trajPlot);
+% h=mesh(X,Y,Z,'facecolor',[1 0 0]); % draw landing disc
+plot3([-radius; radius], [0 0], [0 0], 'LineWidth', 2, 'Color', [83 83 83]./255);
+plot3([0 0], [0 0], [-radius; radius], 'LineWidth', 2, 'Color', [83 83 83]./255);
+zlabel('z (m)', 'FontSize', 14);
+ylabel('y (m)', 'FontSize', 14);
+xlabel('x (m)', 'FontSize', 14);
+axis equal;
+xlim([-0.3 0.3]);
+xticks([-0.3:0.1:0.3]);
+ylim([0 0.6]);
+yticks([0:0.1:0.6]);
+zlim([-0.2 0.4]);
+zticks([-0.2:0.1:0.4]);
+set(gca, 'FontSize', 16);
+view(0,90);
+view(-90,0);
+
+%% Histogram of rref
+close all;
+for ct=1:length(data)
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).rref = vertcat(dummy{:});
+    
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).rmean = vertcat(dummy{:});
+
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).ymean = vertcat(dummy{:});
+    
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).fd_analytical_ti,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).fd_analytical_ti = vertcat(dummy{:});
+    
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).fd_actual_ti,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).fd_actual_ti = vertcat(dummy{:});
+    
+end
+% figure;
+% histogram(-vertcat(data.rref), [0:0.5:8]);
+% xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+% ylabel('Occurances', 'FontSize', 16);
+% set(gca, 'FontSize', 16);
+
+dummy = abs(vertcat(data.rref)-vertcat(data.rmean));
+[mean(dummy) median(dummy) max(dummy)]
+
+dummy = abs(vertcat(data.fd_analytical_ti)-vertcat(data.fd_actual_ti));
+[mean(dummy) median(dummy) max(dummy)]
+
+figure;
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+histfit(-vertcat(data.rmean),[],'Gamma')
+xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+dummy = -vertcat(data.rmean);
+[mean(dummy) median(dummy) max(dummy) min(dummy)]
+pd = fitdist(dummy,'Gamma');
+
+
+
+%% Plot ymean vs rmean
+% Panel a
+close all;
+
+taudots = -0.31032;
+
+intercepts = 0.66879; 
+          
+points_cmap = [252,187,161;
+200,200,200]./255;
+
+line_cmap = [215,48,31;
+37,37,37]./255;
+
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data.tracks_fac,'UniformOutput',false);
+rmean= [vertcat(dummy{:})];
+6
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data.tracks_fac,'UniformOutput',false);
+ymean = [vertcat(dummy{:})];
+
+
+data2plot = [ymean rmean 2*ones(size(rmean))];
+data2plot = data2plot(randperm(size(data2plot, 1)), :);
+figure; hold on;
+% plot lines
+y_vec = min(-ymean):0.001:max(-ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+
+Coefficients = [mean(intercepts) mean(taudots)];
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:),'LineWidth',3);
+
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+
+scatter(-data2plot(:,1),-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+% ylim([0 10])
+
+
+% Panel b - log plots
+modelfun = @(b,x)(b(1)+b(2).*x);
+figure; hold on;
+Coefficients = [mean(intercepts) mean(taudots)];
+plot(log(y_vec),modelfun(Coefficients,log(y_vec)),'Color', line_cmap(2,:),'LineWidth',3);
+set(gca, 'FontSize', 16);
+ylabel('log(r*) (1/s)', 'FontSize', 16);
+xlabel('log(y*) (m)', 'FontSize', 16);
+
+scatter(log(-data2plot(:,1)),log(-data2plot(:,2)),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+
+
+%% Comparison of bbees and hbees
+close all;
+fig1 = figure; hold on;
+x = 0:0.1:8;
+bbee_rref_hist = makedist('Gamma','a',3.59,'b',0.65);
+hbee_rref_hist = fitdist(-vertcat(data.rmean),'Gamma');
+line_cmap = [215,48,31;
+        37,37,37]./255;
+% plot(h(1).XData, pdf(bbee_rref_hist, h(1).XData)*sum(h(1).YData*(diff(h(1).XData(1:2)))),'g','Linewidth',2);
+plot(x, gampdf(x, bbee_rref_hist.a, bbee_rref_hist.b),'Color', line_cmap(1,:) ,'Linewidth',2);
+plot(x, gampdf(x, hbee_rref_hist.a, hbee_rref_hist.b),'Color', line_cmap(2,:),'Linewidth',2);
+xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+legend({'bumblebees','honeybees'})
+set(gca, 'FontSize', 16);
+
+intercepts_bbee = [-1.456806   -1.379435   -1.287747        -1.270285   -1.192914   -1.101225  -1.000403   -0.923032   -0.8313437        -0.8138813  -0.7365104  -0.6448221];
+fig2 = figure; hold on;
+y_vec_bbee = 0.05:0.001:0.35;
+y_vec_hbee = 0.03:0.001:0.56;
+modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+Coefficients_bbee = [mean(intercepts_bbee) -0.872];
+Coefficients_hbee = [intercepts taudots];
+plot(y_vec_bbee,modelfun(Coefficients_bbee,y_vec_bbee),'Color', line_cmap(1,:),'LineWidth',3);
+plot(y_vec_hbee,modelfun(Coefficients_hbee,y_vec_hbee),'Color', line_cmap(2,:),'LineWidth',3);
+legend({'bumblebees','honeybees'})
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+
+%% Plot r* vs y*
+
+% landing_tracks = [landingTracks{:}];
 state_LDF = [landing_tracks.state_LDF];
 rref_segments = [state_LDF.rrefSegments];
 

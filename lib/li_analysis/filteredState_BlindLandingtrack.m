@@ -745,6 +745,86 @@ classdef filteredState_BlindLandingtrack < handle
             end
         end
         
+%         function find_rrefEntry(obj)
+%             % Goes through obj.rrefSegments and finds track segments
+%             % corresponding to entry into constant r.
+%             % monotonic increase or decrease (decided by first point just
+%             % before start of constant-r) decides the start of entry
+%             
+%             if isempty(obj.rrefSegments)
+%                 return
+%             end
+%             
+%             indx = size(obj.filteredState,1);
+%             t_all = obj.filteredState(1:indx,1)-obj.filteredState(1,1);
+%             y_all = obj.filteredState(1:indx,3);
+%             v_all = obj.filteredState(1:indx,6);
+%             a_all = obj.filteredState(1:indx,9);
+%             r = v_all./y_all;
+%             diffr = diff(r);
+%             
+% %             figure;
+% %             plot(y_all,r,'o');
+% %             text(y_all,r,string(1:length(r)));
+% %             title('y vs r')
+%             
+%             for ct=1:length(obj.rrefSegments)
+%                 obj.rrefEntrySegments(ct) = data4rrefEntry();
+%                 
+%                 % Saving some parameters
+%                 obj.rrefEntrySegments(ct).factor = obj.rrefSegments(ct).factor;
+%                 
+%                 % Find entry segment
+%                 if isempty(obj.rrefSegments(ct).intervals_ti)
+%                     continue
+%                 end
+%                 
+%                 
+%                 rref_intervals = [1 1; sortrows(obj.rrefSegments(ct).intervals_ti,1,'ascend')];
+%                 indices = nan(size(rref_intervals,1)-1,1);
+%                 for ct1=2:size(rref_intervals,1)
+%                     if obj.rrefSegments(ct).rmean_ti(ct1-1) > -0.5
+%                         continue
+%                     end
+%                     
+%                     if diffr(rref_intervals(ct1,1)) > 0
+%                         indx1 = find(diffr(rref_intervals(ct1-1,2):rref_intervals(ct1,1)) < 0, 1, 'last');
+%                     elseif diffr(rref_intervals(ct1,1)) < 0
+%                         indx1 = find(diffr(rref_intervals(ct1-1,2):rref_intervals(ct1,1)) > 0, 1, 'last');
+%                     end
+%                     if isempty(indx1)
+%                         indx1 = rref_intervals(ct1-1,2);
+%                     else
+%                         indx1 = indx1 + rref_intervals(ct1-1,2);
+%                     end
+%                     
+%                     indx2 = find(r(rref_intervals(ct1-1,2):rref_intervals(ct1,1)) > -0.5, 1, 'last');
+%                     if isempty(indx2)
+%                         indx2 = rref_intervals(ct1-1,2);
+%                     else
+%                         indx2 = indx2 + rref_intervals(ct1-1,2);
+%                     end
+%                     
+%                     indx = max([indx1, indx2]);
+%                     
+%                     if rref_intervals(ct1,1)-indx>=15 && (obj.rrefSegments(ct).rmean_ti(ct1-1)*1.1 >= mean(r(indx:rref_intervals(ct1,1))) || ...
+%                                                           obj.rrefSegments(ct).rmean_ti(ct1-1)*0.9 <= mean(r(indx:rref_intervals(ct1,1))))
+%                         indices(ct1-1) = indx;
+%                     end
+%                 end
+%                 
+%                 if size(rref_intervals,1)>1
+%                     [rref_intervals, sort_indices] = sortrows(obj.rrefSegments(ct).intervals_ti,1,'ascend');
+%                     nonnan_sort_indices = sort_indices(~isnan(indices));
+%                     obj.rrefEntrySegments(ct).intervals = [indices(~isnan(indices)) rref_intervals(~isnan(indices),:)]; % N by 2, where N is the number of non-overlapping time-window independent intervals
+%                     obj.rrefEntrySegments(ct).rref = obj.rrefSegments(ct).rref_ti(nonnan_sort_indices);
+%                     obj.rrefEntrySegments(ct).rmean = obj.rrefSegments(ct).rmean_ti(nonnan_sort_indices);
+%                 end
+%             end
+%             
+%             
+%         end
+%         
         function find_rrefEntry(obj)
             % Goes through obj.rrefSegments and finds track segments
             % corresponding to entry into constant r.
@@ -824,6 +904,161 @@ classdef filteredState_BlindLandingtrack < handle
             
             
         end
+        
+        function find_rdot_estimate_in_rrefEntry(obj, start_end)
+            % Goes through obj.rrefEntrySegments and finds rdot estimate
+            % between [x1*rref x2*rref] entry segment where x1,
+            % x2 vary from 0 to 1
+            
+            if isempty(obj.rrefEntrySegments)
+                return
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(end,1);
+            y_all = obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+            a_all = obj.filteredState(1:indx,9);
+            r = v_all./y_all;
+%             diffr = diff(r);
+            
+%             figure;
+%             plot(y_all,r,'o');
+%             text(y_all,r,string(1:length(r)));
+%             title('y vs r')
+            
+            for ct=1:length(obj.rrefEntrySegments)
+                
+                % Find entry segment
+                rrefEntry_intervals = obj.rrefEntrySegments(ct).intervals;
+                if isempty(rrefEntry_intervals)
+                    continue
+                end
+                
+                for ct1=1:size(rrefEntry_intervals,1)
+                    rrefEntry_interval = rrefEntry_intervals(ct1,:);
+                    rref = obj.rrefEntrySegments(ct).rref(ct1);
+                    t_interval = t_all(rrefEntry_interval(1):rrefEntry_interval(2));
+                    r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
+                    obj.rrefEntrySegments(ct).const_rvst(ct1,1) = intercept_slope(1);
+                    obj.rrefEntrySegments(ct).slope_rvst(ct1,1) = intercept_slope(2);
+                    
+                    % Compute other parameters used for validation (R2,
+                    % y_dist etc.)
+                    rresid = r_interval - [ones(length(t_interval),1) t_interval]*intercept_slope;
+                    SSresid = sum(rresid.^2); SStotal = (length(r_interval)-1)*var(r_interval);
+                    obj.rrefEntrySegments(ct).Rsquare_rvst(ct1,1) = 1-SSresid/SStotal;
+                    
+                    obj.rrefEntrySegments(ct).ymean_for_rdot(ct1,1) = mean(y_all((rrefEntry_interval(1):rrefEntry_interval(2))));
+                    obj.rrefEntrySegments(ct).delta_r(ct1,1) = abs(diff(r_interval([1 end])));
+                    obj.rrefEntrySegments(ct).delta_y_actual(ct1,1) = abs(diff(y_interval([1 end])));
+                    
+                    tspan = [0 abs(diff(t_interval([1 end])))];
+                    y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
+                    [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+                    obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
+                    asim = (rdot*y(:,1).^2-y(:,2).^2)./y(:,1);
+                    
+%                     y0 = [y_interval(1) v_interval(1)]; rdot = intercept_slope(2);
+%                     [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+%                     obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
+                    
+%                     abs(diff(y([1 end],1))) - abs(diff(y_interval([1 end])))
+                    
+                    if -r_interval(1) < -r_interval(end)
+                        obj.rrefEntrySegments(ct).isRise(ct1,1) = true;
+                    elseif -r_interval(1) > -r_interval(end)
+                        obj.rrefEntrySegments(ct).isRise(ct1,1) = false;
+                    end
+                    
+                    obj.rrefEntrySegments(ct).yEntryStart(ct1,1) = y_interval(1);
+                    obj.rrefEntrySegments(ct).delta_Ventry(ct1,1) = diff(v_interval([1 end]));
+                    obj.rrefEntrySegments(ct).delta_tentry(ct1,1) = diff(t_interval([1 end]));
+                    obj.rrefEntrySegments(ct).amean_entry(ct1,1) = mean(a_interval);
+                end
+            end
+            
+        end
+        
+        function plotHandles = plot_rdotSimulation_with_actualdata(obj, factor)
+            % Plots y,v,a,r vs t for rdot simulation and actual data
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            rrefEntry_intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(rrefEntry_intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(end,1);
+            y_all = obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+            a_all = obj.filteredState(1:indx,9);
+            r = v_all./y_all;
+            
+            plotHandles = figure;
+            p1 = subplot(4,1,1); hold on;
+            p2 = subplot(4,1,2); hold on;
+            p3 = subplot(4,1,3); hold on;
+            p4 = subplot(4,1,4); hold on;
+            
+            for ct1=1:size(rrefEntry_intervals,1)
+                rrefEntry_interval = rrefEntry_intervals(ct1,:);
+                rref = obj.rrefEntrySegments(ct_factor).rref(ct1);
+                t_interval = t_all(rrefEntry_interval(1):rrefEntry_interval(2));
+                r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
+                
+                
+                tspan = [0 abs(diff(t_interval([1 end])))];
+                y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
+                [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+                asim = (rdot*y(:,1).^2-y(:,2).^2)./y(:,1);
+                figure(plotHandles)
+                subplot(4,1,1);
+                plot(t_interval,-y_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,1),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,2);
+                plot(t_interval,v_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,2),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,3);
+                plot(t_interval,-r_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,2)./y(:,1),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,4);
+                plot(t_interval,a_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),asim,'LineWidth',2,'Color',[69 117 180]./255);
+            end
+            
+            figure(plotHandles)
+            subplot(4,1,1); 
+            ylabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,2); 
+            ylabel('V (ms-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,3);
+            ylabel('r (s-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,4);
+            ylabel('A (ms-2)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            
+        end
+        
         
         function plotHandles = plot_rrefsEntry(obj, factor)
             % Plots V vs y and V/y vs y highling change in r* within the same track
@@ -1254,204 +1489,33 @@ classdef filteredState_BlindLandingtrack < handle
         end
         
         
-%         function compute_rref1(obj, params, factors, time_window)
-%             % params - [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}] = [sigma1 sigma2]
-%             % factors - vector of some size
-%             % time_window - 2 by 1 vector = [min_gap max_gap]
-%             
-%             % For each point, intervals are found by looking ahead
-%             % min_gap:1:max_gap points
-%             
-%             % Within each such interval 3 lines are fit
-%             % First line between whole interval: r = m_{0-1} y + c_{0-1}
-%             % Second line between first half of the interval: r = m_{0-0.5} y + c_{0-0.5}
-%             % Third line between second half of the interval: r = m_{0.5-1} y + c_{0.5-1}
-%             % Time windows/intervals which satisfy the following constraint are
-%             % classsified as intervals with constant r (or simply r*).
-%             % Constraint: 
-%             
-%             assert(numel(params)==2 && numel(time_window)==2);
-%             rmse_func = @(idx, indices, data) sqrt(sum((data(indices(idx,1):indices(idx,2)) - mean(data(indices(idx,1):indices(idx,2)))).^2) ...
-%                                                    /(indices(idx,2)-indices(idx,1)+1));
-%             
-%             min_gap = time_window(1); % the first straight line is between current point and (current point + min_gap)th point
-%             max_gap = time_window(2);
-%             
-%             N = size(obj.filteredState,1);
-%             
-%             t_all = obj.filteredState(:,1)-obj.filteredState(1,1);
-%             y_all = obj.filteredState(:,3);
-%             v_all = obj.filteredState(:,6);
-%             a_all = obj.filteredState(:,9);
-%             r_all = v_all./y_all;
-% 
-%             x_all = obj.filteredState(:,2);
-%             z_all = obj.filteredState(:,4);
-%             
-% %             figure;
-% %             plot(t_all,r_all,'o');
-% %             text(t_all,r_all,string(1:length(r_all)));
-% %             title('t vs r')
-%             
-% %             figure;
-% %             plot(y_all,r_all,'o');
-% %             text(y_all,r_all,string(1:length(r_all)));
-% %             title('y vs r')
-%             
-% %             figure;
-% %             plot(t_all,rdot_all,'ro');
-% %             text(t_all,rdot_all,string(1:length(rdot_all)));
-% %             title('t vs rdot');
-%             
-%             for ct_factor=1:length(factors)
-%                 obj.rrefSegments(ct_factor) = data4rrefEstimate();
-%                 
-%                 % Saving some parameters
-%                 obj.rrefSegments(ct_factor).factor = factors(ct_factor);
-%                 obj.rrefSegments(ct_factor).params = params;
-%             end
-%             
-%             possible_indices = cell(length(factors),1); % possible intervals for each factor
-%             
-%             for ct=1:N-min_gap % for each point as a starting point for different lines through origin
-%                 if v_all(ct)/y_all(ct) >= 0
-%                     continue;
-%                 end
-%                 
-%                 end_point = min([ct+max_gap, N]);
-%                 
-%                 % Useful column vectors
-% %                 t = t_all(ct:end_point)-t_all(1);
-%                 y = y_all(ct:end_point);
-%                 v = v_all(ct:end_point);
-%                 a = a_all(ct:end_point);
-%                 r = v./y;
-% %                 rdot = abs(a./y-(v./y).^2);
-%                 
-%                 last_index = find(r > 0, 1) - 1; % last but one point where r becomes positive
-%                 if isempty(last_index)
-%                     last_index = length(r);
-%                 end
-%                 
-%                 coeff = zeros(last_index-min_gap,2); % [intercept slope]
-%                 coeff_firsthalf = zeros(last_index-min_gap,2); 
-%                 coeff_secondhalf = zeros(last_index-min_gap,2); 
-%                 r_mean = zeros(last_index-min_gap,1); % Mean of r within each interval
-%                 a_mean = zeros(last_index-min_gap,1); % Mean of a within each interval
-%                 a_mean_firsthalf = zeros(last_index-min_gap,1); % mean of the ay in the first half of the interval
-%                 a_mean_secondhalf = zeros(last_index-min_gap,1); % mean of the ay in the second half of the interval
-% %                 rdot_mean = zeros(last_index-min_gap,1); % Mean of r within each interval
-% %                 rdot_mean_firsthalf = zeros(last_index-min_gap,1); % Mean of r within each interval
-% %                 rdot_mean_secondhalf = zeros(last_index-min_gap,1); % Mean of r within each interval
-%                 for ct1=min_gap+1:last_index
-%                     coeff(ct1-min_gap,:) = [ones(ct1,1) y(1:ct1)]\r(1:ct1);
-%                     r_mean(ct1-min_gap) = mean(r(1:ct1));
-%                     a_mean(ct1-min_gap) = mean(a(1:ct1));
-% %                     rdot_mean(ct1-min_gap) = mean(rdot(1:ct1));
-%                     if rem(ct1,2) == 0
-% %                         rdot_mean_firsthalf(ct1-min_gap) = mean(rdot(1:ct1/2));
-% %                         rdot_mean_secondhalf(ct1-min_gap) = mean(rdot(ct1/2+1:ct1));
-% 
-%                         a_mean_firsthalf(ct1-min_gap) = mean(a(1:ct1/2));
-%                         a_mean_secondhalf(ct1-min_gap) = mean(a(ct1/2+1:ct1));
-%                         
-%                         coeff_firsthalf(ct1-min_gap,:) = [ones(ct1/2,1) y(1:ct1/2)]\r(1:ct1/2);
-%                         coeff_secondhalf(ct1-min_gap,:) = [ones(ct1/2,1) y(ct1/2+1:ct1)]\r(ct1/2+1:ct1);
-%                     else
-% %                         rdot_mean_firsthalf(ct1-min_gap) = mean(rdot(1:floor(ct1/2)+1));
-% %                         rdot_mean_secondhalf(ct1-min_gap) = mean(rdot(floor(ct1/2)+1:ct1));
-%                         a_mean_firsthalf(ct1-min_gap) = mean(a(1:floor(ct1/2)+1));
-%                         a_mean_secondhalf(ct1-min_gap) = mean(a(floor(ct1/2)+1:ct1));  
-% 
-%                         coeff_firsthalf(ct1-min_gap,:) = [ones(floor(ct1/2)+1,1) y(1:floor(ct1/2)+1)]\r(1:floor(ct1/2)+1);
-%                         coeff_secondhalf(ct1-min_gap,:) = [ones(floor(ct1/2)+1,1) y(floor(ct1/2)+1:ct1)]\r(floor(ct1/2)+1:ct1); 
-%                     end
-%                 end
-%                 
-%                 for ct_factor=1:length(factors)
-%                     factor = factors(ct_factor);
-%                     
-%                     indx = find(abs(coeff(:,1)-r_mean) <= factor*params(1) & abs(coeff(:,2)) <= factor*params(2) & ...
-%                                 abs(coeff_firsthalf(:,1)-r_mean) <= factor*2*params(1) & abs(coeff_firsthalf(:,2)) <= factor*2*params(2) & ...
-%                                 abs(coeff_secondhalf(:,1)-r_mean) <= factor*2*params(1) & abs(coeff_secondhalf(:,2)) <= factor*2*params(2) & ...
-%                                 a_mean <= 0 & a_mean >= -4 & ...
-%                                 a_mean_firsthalf <= 0 & a_mean_firsthalf >= -4 & ...
-%                                 a_mean_secondhalf <= 0 & a_mean_secondhalf >= -4);
-%                     if ~isempty(indx)
-%                         possible_indices{ct_factor} = [possible_indices{ct_factor}; ct*ones(numel(indx),1) ct+min_gap+indx-1];
-%                     end
-%                     
-%                 end
-%                 
-%             end
-%             
-%             for ct_factor=1:length(factors)
-%                 rmse_constFit = arrayfun(@(idx) rmse_func(idx, possible_indices{ct_factor}, r_all), 1:size(possible_indices{ct_factor},1));
-%                 if ~isempty(possible_indices{ct_factor})
-%                     intervalArray = rrefEstimateInterval.createIntervalArray(possible_indices{ct_factor}, rmse_constFit');
-%                     
-%                     % Time-window dependent best intervals for a particular
-%                     % factor
-%                     isChosenInterval = rrefEstimateInterval.findRepresentativeIntervalsPerTimeWindow(intervalArray);
-%                     intervalArray = intervalArray(isChosenInterval);
-%                     intervals_td = possible_indices{ct_factor}(isChosenInterval,:);
-%                     
-%                     [intervalArray.factor] = deal(factors{ct_factor});
-%                     
-%                     values = num2cell(arrayfun(@(i,j) sum(y_all(i:j).*v_all(i:j))/sum(y_all(i:j).^2),intervals_td(:,1),intervals_td(:,2)));
-%                     [intervalArray.rref] = values{:};
-%                     
-%                     values = num2cell(arrayfun(@(i,j)  mean(y_all(i:j)),intervals_td(:,1),intervals_td(:,2)));
-%                     [intervalArray.ymean] = values{:};
-%                     
-%                     values = num2cell(arrayfun(@(i,j)  mean(v_all(i:j)),intervals_td(:,1),intervals_td(:,2)));
-%                     [intervalArray.vmean] = values{:};
-%                     
-%                     values = num2cell(arrayfun(@(i,j)  mean(r_all(i:j)),intervals_td(:,1),intervals_td(:,2)));
-%                     [intervalArray.rmean] = values{:};
-%                     
-%                     obj.rrefSegments_tw_fac = [obj.rrefSegments_tw_fac; intervalArray];
-%                     
-%                     
-%                     
-%                     % Time-window independent best intervals
-%                     chosenIntervals_ti = Interval.findRepresentativeIntervals(intervalArray);
-%                     intervals_ti = possible_indices{ct_factor}(chosenIntervals_ti,:);
-%                     obj.rrefSegments(ct_factor).intervals_ti = intervals_ti;
-%                     obj.rrefSegments(ct_factor).rref_ti = arrayfun(@(i,j) sum(y_all(i:j).*v_all(i:j))/sum(y_all(i:j).^2),intervals_ti(:,1),intervals_ti(:,2));
-%                     obj.rrefSegments(ct_factor).ymean_ti = arrayfun(@(i,j) mean(y_all(i:j)),intervals_ti(:,1),intervals_ti(:,2));
-%                     obj.rrefSegments(ct_factor).vmean_ti = arrayfun(@(i,j) mean(v_all(i:j)),intervals_ti(:,1),intervals_ti(:,2));
-%                     obj.rrefSegments(ct_factor).rmean_ti = arrayfun(@(i,j) mean(r_all(i:j)),intervals_ti(:,1),intervals_ti(:,2));
-%                     coeff = arrayfun(@(i,j) [[ones(j-i+1,1) y_all(i:j)]\r_all(i:j)]',intervals_ti(:,1),intervals_ti(:,2),'UniformOutput',false);
-%                     coeff = vertcat(coeff{:});
-%                     obj.rrefSegments(ct_factor).const_rvsy_ti = coeff(:,1);
-%                     obj.rrefSegments(ct_factor).slope_rvsy_ti = coeff(:,2);
-%                     
-%                     obj.rrefSegments(ct_factor).xTravelled_ti = arrayfun(@(i,j) abs(max(x_all(i:j)) - min(x_all(i:j))), intervals_ti(:,1), intervals_ti(:,2)) ;
-%                     obj.rrefSegments(ct_factor).yTravelled_ti = arrayfun(@(i,j) abs(max(y_all(i:j)) - min(y_all(i:j))), intervals_ti(:,1), intervals_ti(:,2)) ;
-%                     obj.rrefSegments(ct_factor).zTravelled_ti = arrayfun(@(i,j) abs(max(z_all(i:j)) - min(z_all(i:j))), intervals_ti(:,1), intervals_ti(:,2)) ;
-%                     obj.rrefSegments(ct_factor).xmean_ti = arrayfun(@(i,j) mean(x_all(i:j)), intervals_ti(:,1), intervals_ti(:,2)) ;
-%                     obj.rrefSegments(ct_factor).zmean_ti = arrayfun(@(i,j) mean(z_all(i:j)), intervals_ti(:,1), intervals_ti(:,2)) ;
-%                     obj.rrefSegments(ct_factor).fd_analytical_ti = arrayfun(@(i,j) log(abs(y_all(j)/y_all(i))), intervals_ti(:,1), intervals_ti(:,2))./obj.rrefSegments(ct_factor).rref_ti; % analytically computed flight duration 
-%                     obj.rrefSegments(ct_factor).fd_actual_ti = arrayfun(@(i,j) diff(t_all([i j])), intervals_ti(:,1), intervals_ti(:,2)); % actual flight duration
-%                     
-%                     % Time-window dependent best intervals for a particular
-%                     % factor
-%                     chosenIntervals_td = Interval.findRepresentativeIntervalsPerTimeWindow(intervalArray);
-%                     intervals_td = possible_indices{ct_factor}(chosenIntervals_td,:);
-%                     obj.rrefSegments(ct_factor).intervals_td = intervals_td;
-%                     obj.rrefSegments(ct_factor).rref_td = arrayfun(@(i,j) sum(y_all(i:j).*v_all(i:j))/sum(y_all(i:j).^2),intervals_td(:,1),intervals_td(:,2));
-%                     obj.rrefSegments(ct_factor).ymean_td = arrayfun(@(i,j) mean(y_all(i:j)),intervals_td(:,1),intervals_td(:,2));
-%                     obj.rrefSegments(ct_factor).vmean_td = arrayfun(@(i,j) mean(v_all(i:j)),intervals_td(:,1),intervals_td(:,2));
-% %                     
-%                     
-%                 end
-%             end
-%             
-%             % Throw all intervals (different factors and time-windows) together and find best representatives
-%             
-%             
-%         end
+        
+    end
+    
+    methods(Static)
+        function in = IsInsideCylinder(p1, p2, radius, q)
+            % p1 - 1X3
+            % p2 - 1X3
+            % r - 1X1
+            % q - query points (NX3)
+            vec = p2-p1;
+            const = radius*norm(vec);
+            
+            in = dot(q-p1, repmat(vec,size(q,1),1), 2) >= 0 & ...
+                dot(q-p2, repmat(vec,size(q,1),1), 2) <= 0 & ...
+                sum((cross(q-p1, repmat(vec, size(q,1), 1))).^2,2).^0.5 <= const;
+            
+        end
+        
+        function dydt = const_drdt_movement(t, y, rdot)
+            % Differential equations governing flying at constant dr/dt 
+            % used in ode45 for integration
+            % rdot - the constant value of dr/dt at which bbee is flying
+            
+            dydt(1,1) = -y(2);
+            dydt(2,1) = (rdot*y(1)^2-y(2)^2)./y(1);
+            
+        end
         
     end
 end

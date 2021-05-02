@@ -20,12 +20,31 @@ classdef data4rrefEntry < handle
         fd_actual_ti; % actual flight duration
         
         %%%%% Parameters for statistical analysis %%%%%
-        day = ''; % date on which the track was obtained
-        pattern = '';
+        day; % day of the experiment
+        time; % time during the day (measured in blocks)
         patternnum;
         setID;
         beeID;
         flightID;
+        
+        slope_rvst ; % N by 1
+        const_rvst ; % N by 1
+        Rsquare_rvst; % N by 1
+        
+        isRise; % N y 1 (1 if the entry segment is rising, 0 if falling)
+        ymean_for_rdot; % N by 1
+        delta_r; % N by 1
+        delta_y_analytical; % N by 1
+        delta_y_actual; % N by 1
+        
+        yEntryStart;
+        delta_Ventry;
+        delta_tentry;
+        amean_entry;
+        
+        %%%%% Parameters for statistical analysis %%%%%
+        
+        
         
     end
      methods
