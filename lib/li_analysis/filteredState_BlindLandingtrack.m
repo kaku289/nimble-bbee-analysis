@@ -1001,9 +1001,14 @@ classdef filteredState_BlindLandingtrack < handle
                     obj.rrefEntrySegments(ct).delta_y_actual(ct1,1) = abs(diff(y_interval([1 end])));
                     
                     tspan = [0 abs(diff(t_interval([1 end])))];
-                    y0 = [y_interval(1) v_interval(1)]; rdot = intercept_slope(2);
+                    y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
                     [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
                     obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
+                    asim = (rdot*y(:,1).^2-y(:,2).^2)./y(:,1);
+                    
+%                     y0 = [y_interval(1) v_interval(1)]; rdot = intercept_slope(2);
+%                     [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+%                     obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
                     
 %                     abs(diff(y([1 end],1))) - abs(diff(y_interval([1 end])))
                     
@@ -1341,6 +1346,81 @@ classdef filteredState_BlindLandingtrack < handle
                 
                 
             end
+            
+        end
+        
+        function plotHandles = plot_rdotSimulation_with_actualdata(obj, factor)
+            % Plots y,v,a,r vs t for rdot simulation and actual data
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            rrefEntry_intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(rrefEntry_intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(end,1);
+            y_all = obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+            a_all = obj.filteredState(1:indx,9);
+            r = v_all./y_all;
+            
+            plotHandles = figure;
+            p1 = subplot(4,1,1); hold on;
+            p2 = subplot(4,1,2); hold on;
+            p3 = subplot(4,1,3); hold on;
+            p4 = subplot(4,1,4); hold on;
+            
+            for ct1=1:size(rrefEntry_intervals,1)
+                rrefEntry_interval = rrefEntry_intervals(ct1,:);
+                rref = obj.rrefEntrySegments(ct_factor).rref(ct1);
+                t_interval = t_all(rrefEntry_interval(1):rrefEntry_interval(2));
+                r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
+                
+                
+                tspan = [0 abs(diff(t_interval([1 end])))];
+                y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
+                [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+                asim = (rdot*y(:,1).^2-y(:,2).^2)./y(:,1);
+                figure(plotHandles)
+                subplot(4,1,1);
+                plot(t_interval,-y_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,1),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,2);
+                plot(t_interval,v_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,2),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,3);
+                plot(t_interval,-r_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,2)./y(:,1),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,4);
+                plot(t_interval,a_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),asim,'LineWidth',2,'Color',[69 117 180]./255);
+            end
+            
+            figure(plotHandles)
+            subplot(4,1,1); 
+            ylabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,2); 
+            ylabel('V (ms-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,3);
+            ylabel('r (s-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,4);
+            ylabel('A (ms-2)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
             
         end
         
