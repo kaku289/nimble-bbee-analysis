@@ -40,9 +40,9 @@ outputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/Bli
 
 DirPlots = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate';
 % DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/rref_estimate_3dspeed';
-delPreviousPlots = true; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = true;
-savePDFs = true;
+delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = false;
+savePDFs = false;
 
 winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
@@ -52,9 +52,9 @@ rmse_func = @(idx, indices, data) sqrt(sum((data(indices(idx,1):indices(idx,2)) 
 min_gap = 14; % the first straight line is between current point and (current point + min_gap)th point
 max_gap = 49;
 params = [0.53 4.22]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
-% factors = [0.25:0.25:2.5];
+factors = [0.25:0.25:2.5];
 time_window = [min_gap max_gap];
-factors = [1];
+% factors = [1];
 ct_data = 0;
 for ct_wind = 1:length(winds)
     
@@ -84,6 +84,8 @@ for ct_wind = 1:length(winds)
             error('What other treatments did you perform dude?')
         end
         
+        % Only analyse treatments that have uniform wind measurements
+        % avaliable throughout their course of running
         hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
         relevantTreatments = relevantTreatments(hasUniformHwData);
         
@@ -164,6 +166,7 @@ winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 data = data4rrefEstimate.empty;
+hasTakeoff = []; % whether or not the landing track has takeoff dynamics in it as defined in filteredState_BlindLandingtrack.hasTakeoff(..) method
 for ct_wind = 1:length(winds)
     for ct_behaviour = 2%1:length(behaviour)
         
@@ -193,6 +196,8 @@ for ct_wind = 1:length(winds)
             data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
             data1 = horzcat(data1{:});
             
+            hastakeoff_pertreatment = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs)*ones(1,length(x.rrefSegments)),[treatment.landingTracks.state_LDF]','UniformOutput',false);
+            hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
             % Discard empty intervals
             indices = arrayfun(@(x) ~isempty(x.intervals_ti), data1);
             
@@ -205,6 +210,7 @@ for ct_wind = 1:length(winds)
             [data1.time] = deal(treatment.startTime);
             
             data = [data data1];
+            hasTakeoff = [hasTakeoff hastakeoff_pertreatment(indices)];
             %                 size(data)
             %                 keyboard;
         end
@@ -223,8 +229,9 @@ for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
     N = length(data_fac);
-    
+    N_fromtakeoff = sum(hasTakeoff_fac);
     % Create nominal and ordinal variables
     approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
@@ -233,6 +240,8 @@ for ct_factor=1:length(factors)
 %     light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
+    hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
     % create other variables
     y = -vertcat(data_fac.ymean_ti);
@@ -247,16 +256,17 @@ for ct_factor=1:length(factors)
         
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
-        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d];
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d vertcat(hasTakeoff_fac{:})];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
           ', # tracks with >1 r*: ' num2str(N1)]);
+    disp(['# tracks from takeoff: ' num2str(N_fromtakeoff)]);
 end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold', 'speed3d'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold', 'speed3d', 'hasTakeoff'});
     writetable(T,r_file);
 end
 
@@ -268,16 +278,19 @@ clc;
 writeFile = true;
 r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_multiple_rrefs_Rstudio.txt';
 % r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_multiple_rrefs_Rstudio_3dspeed.txt';
+
 data_write = [];
 factors = [0.25:0.25:2.5];
 for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
     
     % Choose segments that contain >1 r* segments
     has_multiple_rrefs = arrayfun(@(x) size(x.intervals_ti,1) > 1,data_fac);
     data_fac = data_fac(has_multiple_rrefs);
+    hasTakeoff_fac = hasTakeoff_fac(has_multiple_rrefs);
     
     N = length(data_fac);
     
@@ -290,6 +303,8 @@ for ct_factor=1:length(factors)
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
+    hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+        
     % create other variables
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
@@ -300,7 +315,7 @@ for ct_factor=1:length(factors)
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
-        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) vertcat(hasTakeoff_fac{:})];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -309,7 +324,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold','hasTakeoff'});
     writetable(T,r_file);
 end
 
@@ -325,10 +340,12 @@ for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
     data_fac = data(abs([data.factor]-factor)<1e-6)';
-    
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
+        
     % Choose segments that contain >1 r* segments
     has_one_rref = arrayfun(@(x) size(x.intervals_ti,1) == 1, data_fac);
     data_fac = data_fac(has_one_rref);
+    hasTakeoff_fac = hasTakeoff_fac(has_one_rref);
     
     N = length(data_fac);
     
@@ -341,6 +358,8 @@ for ct_factor=1:length(factors)
     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     
+    hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
     % create other variables
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
@@ -351,7 +370,7 @@ for ct_factor=1:length(factors)
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
-        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) vertcat(hasTakeoff_fac{:})];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -360,7 +379,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold','hasTakeoff'});
     writetable(T,r_file);
 end
 

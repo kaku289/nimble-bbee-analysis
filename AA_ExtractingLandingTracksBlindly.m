@@ -543,6 +543,11 @@ for ct_wind = 1:length(winds)
                                      rem(1:length(treatments), 8)>1 & ...
                                      rem(1:length(treatments), 8)<8);
                                  
+                % Only analyse treatments that have uniform wind measurements
+                % avaliable throughout their course of running                 
+                hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+                relevantTreatments = relevantTreatments(hasUniformHwData);
+                
                 landingTracks = [relevantTreatments.landingTracks];
                                  
                 % # of landing tracks
@@ -568,11 +573,11 @@ keyboard;
 % easier
 
 clc; close all; 
-clear;
+% clear;
 
 % % % Inputs
 inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3.mat';
-load(inputFile);
+% load(inputFile);
 
 for ct_treatment=1:length(treatments)
     treatment = treatments(ct_treatment);

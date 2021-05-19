@@ -36,6 +36,7 @@ winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 data_all = struct.empty;
 
+Nperday = zeros(length(winds),1); % no. of state LDFs per day in different winds
 for ct_wind = 1:length(winds)
         for ct_behaviour = 2%1:length(behaviour)
             clear dummy;
@@ -61,6 +62,8 @@ for ct_wind = 1:length(winds)
             else
                 error('What other treatments did you perform dude?')
             end
+            hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+            relevantTreatments = relevantTreatments(hasUniformHwData);
             
             landingTracks = [relevantTreatments.landingTracks];
             startTimes = arrayfun(@(x) (x.startTime)*ones(length([x.landingTracks.state_LDF]), 1), ...
@@ -86,12 +89,18 @@ for ct_wind = 1:length(winds)
             dummy.time = startTimes';
             
             data_all = [data_all; dummy];
+            
+            Nperday(ct_wind) = length([landingTracks.state_LDF])/length(relevantTreatments);
   
         end
 
 end
 % keyboard;
-
+figure;
+bar(winds, Nperday);
+ylabel('No. of landings per day', 'FontSize', 14);
+xlabel('Wind conditions', 'FontSize', 14);
+set(gca, 'FontSize', 16);
 
 % %  Write file for analysis in R for 10005 tracks
 writeFile = false;
@@ -155,7 +164,7 @@ close all;
 
 % Plot all individual tracks (every 70th track)
 % Find Vrange
-skip_step = 700;
+skip_step = 150;
 Vrange = [];
 for ct=1:length(data_all)
     for ct1=1:skip_step:length(data_all(ct).state_LDF)
@@ -444,4 +453,4 @@ ylabel('r (s-1)', 'FontSize', 16);
 xlabel('y (m)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 xline(0.04); xline(0.11);
-legend(winds);
+legend(arrayfun(@(x) num2str(x),winds,'UniformOutput',false));

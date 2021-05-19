@@ -25,6 +25,22 @@ classdef data4rrefEntry < handle
         pattern; % 1 (checkerboard) or 2 (spokes)
         light; % 1 (low), 2 (medium), 3 (high)
         side; % 1 (hive), 2 (food source)
+        wind; % 1 to 6
+        
+        slope_rvst ; % N by 1
+        const_rvst ; % N by 1
+        Rsquare_rvst; % N by 1
+        
+        isRise; % N y 1 (1 if the entry segment is rising, 0 if falling)
+        ymean_for_rdot; % N by 1
+        delta_r; % N by 1
+        delta_y_analytical; % N by 1
+        delta_y_actual; % N by 1
+        
+        yEntryStart;
+        delta_Ventry;
+        delta_tentry;
+        amean_entry;
         
     end
      methods

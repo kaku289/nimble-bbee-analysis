@@ -45,7 +45,31 @@ classdef filteredState_BlindLandingtrack < handle
             
         end
         
-        
+        function has = hasTakeoff(obj, landingDiscs)
+            % Determines if the landing track has a non-takeoff start
+            
+            % landingDiscs - 1x2 LandingDisc array
+            
+            
+            [~, ymin_indx] = min(obj.filteredState(:,3));
+            state0 = obj.filteredState(ymin_indx,:);
+            
+            oppositeDisc = landingDiscs(arrayfun(@(x) ~strcmpi(x.side, obj.landingSide), landingDiscs));
+            thisDisc = landingDiscs(arrayfun(@(x) strcmpi(x.side, obj.landingSide), landingDiscs));
+            
+            center = (oppositeDisc.center - thisDisc.center)';
+            if strcmpi(thisDisc.side,'feeder')
+                center(2) = -center(:, 2);
+            end
+            height_cylinder = 0.05;
+            if any(filteredState_BlindLandingtrack.IsInsideCylinder(center - [0 height_cylinder/2 0], center + [0 height_cylinder/2 0], oppositeDisc.radius, obj.filteredState(:,2:4))) || ...
+                    any(obj.filteredState(:,4) < -0.20)
+                has = true;
+            else
+                has = false;
+            end
+        end
+                
         function compute_rref(obj, params, factors, time_window)
             % params - [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}] = [sigma1 sigma2]
             % factors - vector of some size
@@ -313,6 +337,101 @@ classdef filteredState_BlindLandingtrack < handle
                 plot([0 -state_subset(end,3)],[0 -obj.rref*-state_subset(end,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
                 
                 subplot(2,1,2);
+                plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
+                plot(-state_subset([1,end],3),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
+                plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+            end
+            
+        end
+        
+        function plotHandles = plot_rrefs_with_acc(obj, factor)
+            % Plots V vs y, V/y vs y and a vs y highling change in r* within the same track
+            % excerpt with positive V and positive y
+            % This function plots time-window independent best intervals
+            
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefSegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefSegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* intervals for the asked factor.');
+            end
+            intervals = obj.rrefSegments(ct_factor).intervals_ti;
+            if isempty(intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            dataPerTrackExcerpt = struct.empty;
+            for ct=1:size(intervals,1)
+                dataPerTrackExcerpt(ct).state4rrefEstimate = obj.filteredState(intervals(ct,1):intervals(ct,2),:);
+                dataPerTrackExcerpt(ct).rref = obj.rrefSegments(ct_factor).rref_ti(ct);%mean(dataPerTrackExcerpt(ct).state4rrefEstimate(:,6)./dataPerTrackExcerpt(ct).state4rrefEstimate(:,3));
+            end
+            data4rref = vertcat(dataPerTrackExcerpt.state4rrefEstimate);
+            
+            ymin = min(data4rref(:,3));
+            [~, indx_ymin] = min(abs(obj.filteredState(:,3)-ymin));
+            time_ymin = obj.filteredState(indx_ymin,1);
+            % Start from 0.06s data earlier than dataTrackExcerpt.filteredState(indx_ymax,1)
+            indx_start = find(obj.filteredState(:,1)-time_ymin<-0.06,1);
+            if isempty(indx_start)
+                indx_start = 1;
+            end
+            complete_state = obj.filteredState(indx_start:end,:);
+            
+            plotHandles = figure;
+            p1 = subplot(3,1,1); hold on;
+            plot(-complete_state(:,3),complete_state(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('V (m/s)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3)], 'FontSize', 16);
+            %     ylim([-0.2 p1.YLim(2)]);
+            %     ylim([-0.2 0.6]);
+            %     yticks([-0.2:0.2:0.6]);
+            %     xticks([p1.XLim(1):0.1:0]);
+            
+            
+            p2 = subplot(3,1,2); hold on;
+            %     plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (1/s)', 'FontSize', 16);
+            %     ylabel('V_{gy} / y (1/s)', 'FontSize', 16);
+            xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(data4rref(:,6)./data4rref(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(data4rref(:,6)./data4rref(:,3))-1)));
+            %     xticks(p1.XLim(1):0.1:0);
+            
+            p3 = subplot(3,1,3); hold on;
+            %     plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            plot(-complete_state(:,3),complete_state(:,9),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('a (ms^{-2})', 'FontSize', 16);
+            xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+%             ylim([0 ceil(-1*ceil(min(data4rref(:,6)./data4rref(:,3))-1))]);
+%             yticks(0:1:ceil(-1*ceil(min(data4rref(:,6)./data4rref(:,3))-1)));
+            
+            linkaxes([p1, p2, p3],'x');
+            if abs(floor((min(data4rref(:,3))/0.05))*0.05 - min(data4rref(:,3))) > 0.025
+                xmin = floor((min(data4rref(:,3))/0.05))*0.05;
+            else
+                xmin = floor((min(data4rref(:,3))/0.05))*0.05-0.05;
+            end
+            xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                figure(plotHandles(1))
+                subplot(3,1,1);
+                plot(-state_subset(:,3),state_subset(:,6),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_subset(:,3),-obj.rref*-state_subset(:,3),'LineWidth',2,'Color',[69 117 180]./255);
+                plot([0 -state_subset(end,3)],[0 -obj.rref*-state_subset(end,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(3,1,2);
                 plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
                 %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
                 plot(-state_subset([1,end],3),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
@@ -610,8 +729,10 @@ classdef filteredState_BlindLandingtrack < handle
             
             if strcmpi(obj.landingSide, 'Hive')
                 [obj.rrefSegments.side] = deal(1);
+                [obj.rrefEntrySegments.side] = deal(1);
             elseif strcmpi(obj.landingSide, 'Feeder')
                 [obj.rrefSegments.side] = deal(2);
+                [obj.rrefEntrySegments.side] = deal(2);
             end
         end
         
@@ -825,6 +946,85 @@ classdef filteredState_BlindLandingtrack < handle
             
         end
         
+        function find_rdot_estimate_in_rrefEntry(obj, start_end)
+            % Goes through obj.rrefEntrySegments and finds rdot estimate
+            % between [x1*rref x2*rref] entry segment where x1,
+            % x2 vary from 0 to 1
+            
+            if isempty(obj.rrefEntrySegments)
+                return
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(end,1);
+            y_all = obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+            a_all = obj.filteredState(1:indx,9);
+            r = v_all./y_all;
+%             diffr = diff(r);
+            
+%             figure;
+%             plot(y_all,r,'o');
+%             text(y_all,r,string(1:length(r)));
+%             title('y vs r')
+            
+            for ct=1:length(obj.rrefEntrySegments)
+                
+                % Find entry segment
+                rrefEntry_intervals = obj.rrefEntrySegments(ct).intervals;
+                if isempty(rrefEntry_intervals)
+                    continue
+                end
+                
+                for ct1=1:size(rrefEntry_intervals,1)
+                    rrefEntry_interval = rrefEntry_intervals(ct1,:);
+                    rref = obj.rrefEntrySegments(ct).rref(ct1);
+                    t_interval = t_all(rrefEntry_interval(1):rrefEntry_interval(2));
+                    r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
+                    obj.rrefEntrySegments(ct).const_rvst(ct1,1) = intercept_slope(1);
+                    obj.rrefEntrySegments(ct).slope_rvst(ct1,1) = intercept_slope(2);
+                    
+                    % Compute other parameters used for validation (R2,
+                    % y_dist etc.)
+                    rresid = r_interval - [ones(length(t_interval),1) t_interval]*intercept_slope;
+                    SSresid = sum(rresid.^2); SStotal = (length(r_interval)-1)*var(r_interval);
+                    obj.rrefEntrySegments(ct).Rsquare_rvst(ct1,1) = 1-SSresid/SStotal;
+                    
+                    obj.rrefEntrySegments(ct).ymean_for_rdot(ct1,1) = mean(y_all((rrefEntry_interval(1):rrefEntry_interval(2))));
+                    obj.rrefEntrySegments(ct).delta_r(ct1,1) = abs(diff(r_interval([1 end])));
+                    obj.rrefEntrySegments(ct).delta_y_actual(ct1,1) = abs(diff(y_interval([1 end])));
+                    
+                    tspan = [0 abs(diff(t_interval([1 end])))];
+                    y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
+                    [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+                    obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
+                    asim = (rdot*y(:,1).^2-y(:,2).^2)./y(:,1);
+                    
+%                     y0 = [y_interval(1) v_interval(1)]; rdot = intercept_slope(2);
+%                     [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+%                     obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
+                    
+%                     abs(diff(y([1 end],1))) - abs(diff(y_interval([1 end])))
+                    
+                    if -r_interval(1) < -r_interval(end)
+                        obj.rrefEntrySegments(ct).isRise(ct1,1) = true;
+                    elseif -r_interval(1) > -r_interval(end)
+                        obj.rrefEntrySegments(ct).isRise(ct1,1) = false;
+                    end
+                    
+                    obj.rrefEntrySegments(ct).yEntryStart(ct1,1) = y_interval(1);
+                    obj.rrefEntrySegments(ct).delta_Ventry(ct1,1) = diff(v_interval([1 end]));
+                    obj.rrefEntrySegments(ct).delta_tentry(ct1,1) = diff(t_interval([1 end]));
+                    obj.rrefEntrySegments(ct).amean_entry(ct1,1) = mean(a_interval);
+                end
+            end
+            
+        end
+        
         function plotHandles = plot_rrefsEntry(obj, factor)
             % Plots V vs y and V/y vs y highling change in r* within the same track
             % excerpt with positive V and positive y
@@ -912,6 +1112,312 @@ classdef filteredState_BlindLandingtrack < handle
                 plot(-state_subset([1,end],3),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
                 plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
             end
+            
+        end
+        
+        function plotHandles = plot_rrefsEntry_with_acc(obj, factor)
+            % Plots V vs y and V/y vs y and a vs y highling change in r* within the same track
+            % excerpt with positive V and positive y
+            % This function plots time-window independent best intervals
+            
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            dataPerTrackExcerpt = struct.empty;
+            for ct=1:size(intervals,1)
+                dataPerTrackExcerpt(ct).state4rrefEstimate = obj.filteredState(intervals(ct,2):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).state4rrefEntry = obj.filteredState(intervals(ct,1):intervals(ct,2),:);
+                dataPerTrackExcerpt(ct).rref = obj.rrefEntrySegments(ct_factor).rref(ct);%mean(dataPerTrackExcerpt(ct).state4rrefEstimate(:,6)./dataPerTrackExcerpt(ct).state4rrefEstimate(:,3));
+            end
+            datacombined = [vertcat(dataPerTrackExcerpt.state4rrefEstimate); vertcat(dataPerTrackExcerpt.state4rrefEntry)];
+            
+            ymin = min(datacombined(:,3));
+            [~, indx_ymin] = min(abs(obj.filteredState(:,3)-ymin));
+            time_ymin = obj.filteredState(indx_ymin,1);
+            % Start from 0.06s data earlier than dataTrackExcerpt.filteredState(indx_ymax,1)
+            indx_start = find(obj.filteredState(:,1)-time_ymin<-0.06,1);
+            if isempty(indx_start)
+                indx_start = 1;
+            end
+            complete_state = obj.filteredState(indx_start:end,:);
+            
+            plotHandles = figure;
+            p1 = subplot(3,1,1); hold on;
+            plot(-complete_state(:,3),complete_state(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('V (m/s)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3)], 'FontSize', 16);
+            ylim([0 ceil(p1.YLim(2)*10)/10]);
+            %     ylim([-0.2 0.6]);
+            yticks([0:0.1:p1.YLim(2)]);
+            %     xticks([p1.XLim(1):0.1:0]);
+            
+            
+            p2 = subplot(3,1,2); hold on;
+            %     plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (1/s)', 'FontSize', 16);
+            %     ylabel('V_{gy} / y (1/s)', 'FontSize', 16);
+%             xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            %     xticks(p1.XLim(1):0.1:0);
+            
+            p3 = subplot(3,1,3); hold on;
+            plot(-complete_state(:,3),complete_state(:,9),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('a (ms^{-2})', 'FontSize', 16);
+            xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            yline(0,'--');
+            ylim([-4 4]);
+            yticks(-4:4:4);
+            
+            linkaxes([p1, p2, p3],'x');
+            if abs(floor((min(datacombined(:,3))/0.05))*0.05 - min(datacombined(:,3))) > 0.025
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05;
+            else
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05-0.05;
+            end
+            xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                state_4entry = obj.state4rrefEntry;
+                figure(plotHandles(1))
+                subplot(3,1,1);
+                plot(-state_subset(:,3),state_subset(:,6),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_4entry(:,3),state_4entry(:,6),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(-state_subset(:,3),-obj.rref*-state_subset(:,3),'LineWidth',2,'Color',[69 117 180]./255);
+                plot([0 -state_subset(end,3)],[0 -obj.rref*-state_subset(end,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(3,1,2);
+                plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_4entry(:,3),state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
+                plot(-state_subset([1,end],3),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
+                plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(3,1,3);
+                plot(-state_subset(:,3),state_subset(:,9),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_4entry(:,3),state_4entry(:,9),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                
+            end
+            
+        end
+        
+        function plotHandles = plot_rrefsEntry_with_rdotestimate(obj, factor)
+            % Plots r vs t, r vs y and V vs y highling change in r* within the same track
+            % excerpt with positive V and positive y
+            % This function plots time-window independent best intervals
+            
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            dataPerTrackExcerpt = struct.empty;
+            for ct=1:size(intervals,1)
+                dataPerTrackExcerpt(ct).state4rrefEstimate = obj.filteredState(intervals(ct,2):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).state4rrefEntry = obj.filteredState(intervals(ct,1):intervals(ct,2),:);
+                dataPerTrackExcerpt(ct).rref = obj.rrefEntrySegments(ct_factor).rref(ct);%mean(dataPerTrackExcerpt(ct).state4rrefEstimate(:,6)./dataPerTrackExcerpt(ct).state4rrefEstimate(:,3));
+                dataPerTrackExcerpt(ct).const_rvst = obj.rrefEntrySegments(ct_factor).const_rvst(ct);
+                dataPerTrackExcerpt(ct).slope_rvst = obj.rrefEntrySegments(ct_factor).slope_rvst(ct);
+            end
+            datacombined = [vertcat(dataPerTrackExcerpt.state4rrefEstimate); vertcat(dataPerTrackExcerpt.state4rrefEntry)];
+            
+            ymin = min(datacombined(:,3));
+            [~, indx_ymin] = min(abs(obj.filteredState(:,3)-ymin));
+            time_ymin = obj.filteredState(indx_ymin,1);
+            % Start from 0.06s data earlier than dataTrackExcerpt.filteredState(indx_ymax,1)
+            indx_start = find(obj.filteredState(:,1)-time_ymin<-0.06,1);
+            if isempty(indx_start)
+                indx_start = 1;
+            end
+            complete_state = obj.filteredState(indx_start:end,:);
+            
+            plotHandles = figure;
+            p0 = subplot(3,1,1); hold on;
+            plot(complete_state(:,1)-complete_state(end,1),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (s-1)', 'FontSize', 16);
+            xlabel('t (s)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on
+            title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3)], 'FontSize', 16);
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            
+            
+            p1 = subplot(3,1,3); hold on;
+            plot(-complete_state(:,3),complete_state(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('V (m/s)', 'FontSize', 16);
+            xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+%             title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3)], 'FontSize', 16);
+            ylim([0 ceil(p1.YLim(2)*10)/10]);
+            %     ylim([-0.2 0.6]);
+            yticks([0:0.1:p1.YLim(2)]);
+            %     xticks([p1.XLim(1):0.1:0]);
+            
+            
+            p2 = subplot(3,1,2); hold on;
+            %     plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (s-1)', 'FontSize', 16);
+            
+            set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            %     xticks(p1.XLim(1):0.1:0);
+            
+            
+            subplot(3,1,3);
+            linkaxes([p1, p2],'x');
+            if abs(floor((min(datacombined(:,3))/0.05))*0.05 - min(datacombined(:,3))) > 0.025
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05;
+            else
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05-0.05;
+            end
+            xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            subplot(3,1,1);
+%             indx = find(abs(complete_state(:,3)-xmin) < 5e-3, 1, 'last');
+            ttt = datacombined(:,1)-complete_state(end,1);
+%             xlim([floor(min(ttt)*10)/10 ceil(max(ttt)*10)/10]);
+            xlim([floor(min(ttt)/0.5)*0.5 ceil(max(ttt)/0.5)*0.5]);
+            xticks([floor(min(ttt)/0.5)*0.5:0.25:ceil(max(ttt)/0.5)*0.5]);
+%             xlim([floor(min(ttt)*10)/10 0]);
+%             xlim([floor(ttt(indx)*10)/10 0]);
+
+            
+            
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                state_4entry = obj.state4rrefEntry;
+                figure(plotHandles(1))
+                subplot(3,1,1);
+                plot(state_subset(:,1)-complete_state(end,1),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(state_4entry(:,1)-complete_state(end,1),state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(state_subset([1,end],1)-complete_state(end,1),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
+%                 plot([p1.XLim(1) state_subset(1,1)-complete_state(end,1)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+                % Plot rdot estimate
+                restimated = obj.const_rvst + obj.slope_rvst*(state_4entry(:,1)-complete_state(end,1));
+                plot(state_4entry(:,1)-complete_state(end,1),-restimated,'LineWidth',2,'Color',[0 0 0]./255);
+
+                
+                
+                subplot(3,1,3);
+                plot(-state_subset(:,3),state_subset(:,6),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_4entry(:,3),state_4entry(:,6),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(-state_subset(:,3),-obj.rref*-state_subset(:,3),'LineWidth',2,'Color',[69 117 180]./255);
+%                 plot([0 -state_subset(end,3)],[0 -obj.rref*-state_subset(end,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(3,1,2);
+                plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(-state_4entry(:,3),state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
+                plot(-state_subset([1,end],3),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
+%                 plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                
+            end
+            
+        end
+        
+        function plotHandles = plot_rdotSimulation_with_actualdata(obj, factor)
+            % Plots y,v,a,r vs t for rdot simulation and actual data
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            rrefEntry_intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(rrefEntry_intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(end,1);
+            y_all = obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+            a_all = obj.filteredState(1:indx,9);
+            r = v_all./y_all;
+            
+            plotHandles = figure;
+            p1 = subplot(4,1,1); hold on;
+            p2 = subplot(4,1,2); hold on;
+            p3 = subplot(4,1,3); hold on;
+            p4 = subplot(4,1,4); hold on;
+            
+            for ct1=1:size(rrefEntry_intervals,1)
+                rrefEntry_interval = rrefEntry_intervals(ct1,:);
+                rref = obj.rrefEntrySegments(ct_factor).rref(ct1);
+                t_interval = t_all(rrefEntry_interval(1):rrefEntry_interval(2));
+                r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)
+                intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
+                
+                
+                tspan = [0 abs(diff(t_interval([1 end])))];
+                y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
+                [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
+                asim = (rdot*y(:,1).^2-y(:,2).^2)./y(:,1);
+                figure(plotHandles)
+                subplot(4,1,1);
+                plot(t_interval,-y_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,1),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,2);
+                plot(t_interval,v_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,2),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,3);
+                plot(t_interval,-r_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),y(:,2)./y(:,1),'LineWidth',2,'Color',[69 117 180]./255);
+                subplot(4,1,4);
+                plot(t_interval,a_interval,'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(t+t_interval(1),asim,'LineWidth',2,'Color',[69 117 180]./255);
+            end
+            
+            figure(plotHandles)
+            subplot(4,1,1); 
+            ylabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,2); 
+            ylabel('V (ms-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,3);
+            ylabel('r (s-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
+            subplot(4,1,4);
+            ylabel('A (ms-2)', 'FontSize', 16);
+            set(gca, 'FontSize', 16);
             
         end
         
@@ -1154,6 +1660,367 @@ classdef filteredState_BlindLandingtrack < handle
             
         end
         
+        function plotHandles = plot_rrefsEntry_withActualFilteredEstimatedData(obj, factor, sysiddata, tf)
+            % Plots V vs y and V/y vs y highling entry in r* and r* within the same track
+            % excerpt with positive V and positive y
+            % This function plots time-window independent best intervals
+            
+            % factor - chosen factor for which plot is desired
+            
+            % sysiddata - data used for sys id (in cell array)
+            % tf - transfer function array (3D array)
+            
+            r = -obj.filteredState(:,6)./obj.filteredState(:,3);
+            y = -obj.filteredState(:,3);
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(intervals)
+                plotHandles = [];
+                return;
+            end
+            assert(size(intervals,1)==length(sysiddata) )%&& size(intervals,1)==size(tfs,3));
+            
+            dataPerTrackExcerpt = struct.empty;
+            for ct=1:size(intervals,1)
+                dataPerTrackExcerpt(ct).state4rrefEstimate = obj.filteredState(intervals(ct,2):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).state4rrefEntry = obj.filteredState(intervals(ct,1):intervals(ct,2),:);
+                dataPerTrackExcerpt(ct).stateEntryRrefCombined = obj.filteredState(intervals(ct,1):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).rref = obj.rrefEntrySegments(ct_factor).rref(ct);%mean(dataPerTrackExcerpt(ct).state4rrefEstimate(:,6)./dataPerTrackExcerpt(ct).state4rrefEstimate(:,3));
+            end
+            datacombined = [vertcat(dataPerTrackExcerpt.state4rrefEstimate); vertcat(dataPerTrackExcerpt.state4rrefEntry)];
+            
+            ymin = min(datacombined(:,3));
+            [~, indx_ymin] = min(abs(obj.filteredState(:,3)-ymin));
+            time_ymin = obj.filteredState(indx_ymin,1);
+            % Start from 0.06s data earlier than dataTrackExcerpt.filteredState(indx_ymax,1)
+            indx_start = find(obj.filteredState(:,1)-time_ymin<-0.06,1);
+            if isempty(indx_start)
+                indx_start = 1;
+            end
+            complete_state = obj.filteredState(indx_start:end,:);
+            
+            plotHandles = figure;
+            p1 = subplot(2,1,1); hold on;
+            plot(-complete_state(:,3),complete_state(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('V (ms-1)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            %     ylim([-0.2 p1.YLim(2)]);
+            %     ylim([-0.2 0.6]);
+            %     yticks([-0.2:0.2:0.6]);
+            %     xticks([p1.XLim(1):0.1:0]);
+            
+            
+            p2 = subplot(2,1,2); hold on;
+            %     plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (s-1)', 'FontSize', 16);
+            %     ylabel('V_{gy} / y (1/s)', 'FontSize', 16);
+            xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            %     xticks(p1.XLim(1):0.1:0);
+            
+            linkaxes([p1, p2],'x');
+            if abs(floor((min(datacombined(:,3))/0.05))*0.05 - min(datacombined(:,3))) > 0.025
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05;
+            else
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05-0.05;
+            end
+            xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            
+%             output = -state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),6)./...
+%                 state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),3);
+%             input = -rrefEntrySegments_fac.rmean(ct2)*ones(length(output),1);
+%             dt = mean(diff(state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),1)));
+                        
+            fitPercents = [];
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                state_4entry = obj.state4rrefEntry;
+                state_entryRrefCombined = obj.stateEntryRrefCombined;
+                
+%                 output = r(intervals(ct,1):intervals(ct,3));
+%                 input = -obj.rref*ones(length(output),1);
+%                 dt = mean(diff(state_subset(:,1)));
+%                 data1 = iddata(output, input, dt);
+                
+%                 [num, den] = butter(2, fc/(1/dt/2),'low');
+                rFiltered = sysiddata{ct}.y;
+                
+                if length(tf)==1
+                    [rsim,fit,rsim0] = compare(sysiddata{ct}, tf);
+                else
+                    assert(length(tf) == size(intervals,1));
+                    [rsim,fit,rsim0] = compare(sysiddata{ct}, tf(:,:,ct));
+                end
+                
+                figure(plotHandles(1))
+                subplot(2,1,1);
+                plot(-state_4entry(:,3),state_4entry(:,6),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(-state_subset(:,3),state_subset(:,6),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                
+                plot(y(intervals(ct,1):intervals(ct,3)),rFiltered.*y(intervals(ct,1):intervals(ct,3)),'LineWidth',2.5,'Color',[255 0 255]./255);
+                plot(y(intervals(ct,1):intervals(ct,3)),rsim.y.*y(intervals(ct,1):intervals(ct,3)),'LineWidth',1.5,'Color',[69 117 180]./255);
+                
+                plot([0 -state_subset(1,3)],[0 -obj.rref*-state_subset(1,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(2,1,2);
+                plot(-state_4entry(:,3),state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                
+                %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
+                
+                plot(y(intervals(ct,1):intervals(ct,3)),rFiltered,'LineWidth',2.5,'Color',[255 0 255]./255);
+                plot(y(intervals(ct,1):intervals(ct,3)),rsim.y,'LineWidth',1.5,'Color',[69 117 180]./255);
+                
+                plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                fitPercents = [fitPercents fit];
+            end
+            figure(plotHandles(1))
+            subplot(2,1,1);
+            title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3) ', % fit: ' num2str(fitPercents,4)], 'FontSize', 16);
+
+            
+        end
+        
+        function plotHandles = plot_rrefsEntry_withActualFilteredEstimatedData2(obj, factor, sysiddata, tf)
+            % Plots r vs t, r vs y and V vs y 
+            % Also highlights entry in r* and r* within the same track
+            % excerpt with positive V and positive y
+            % Overlays low-pass filtered data and sys-id data as well
+            % This function plots time-window independent best intervals
+            
+            % factor - chosen factor for which plot is desired
+            
+            % sysiddata - data used for sys id (in cell array)
+            % tf - transfer function array (3D array)
+            
+            r = -obj.filteredState(:,6)./obj.filteredState(:,3);
+            y = -obj.filteredState(:,3);
+            t = obj.filteredState(:,1)-obj.filteredState(end,1);
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(intervals)
+                plotHandles = [];
+                return;
+            end
+            assert(size(intervals,1)==length(sysiddata) )%&& size(intervals,1)==size(tfs,3));
+            
+            dataPerTrackExcerpt = struct.empty;
+            for ct=1:size(intervals,1)
+                dataPerTrackExcerpt(ct).state4rrefEstimate = obj.filteredState(intervals(ct,2):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).state4rrefEntry = obj.filteredState(intervals(ct,1):intervals(ct,2),:);
+                dataPerTrackExcerpt(ct).stateEntryRrefCombined = obj.filteredState(intervals(ct,1):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).rref = obj.rrefEntrySegments(ct_factor).rref(ct);%mean(dataPerTrackExcerpt(ct).state4rrefEstimate(:,6)./dataPerTrackExcerpt(ct).state4rrefEstimate(:,3));
+            end
+            datacombined = [vertcat(dataPerTrackExcerpt.state4rrefEstimate); vertcat(dataPerTrackExcerpt.state4rrefEntry)];
+            
+            ymin = min(datacombined(:,3));
+            [~, indx_ymin] = min(abs(obj.filteredState(:,3)-ymin));
+            time_ymin = obj.filteredState(indx_ymin,1);
+            % Start from 0.06s data earlier than dataTrackExcerpt.filteredState(indx_ymax,1)
+            indx_start = find(obj.filteredState(:,1)-time_ymin<-0.06,1);
+            if isempty(indx_start)
+                indx_start = 1;
+            end
+            complete_state = obj.filteredState(indx_start:end,:);
+            
+            plotHandles = figure;
+            p0 = subplot(3,1,1); hold on;
+            plot(complete_state(:,1)-complete_state(end,1),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (s-1)', 'FontSize', 16);
+            xlabel('t (s)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on
+            title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3)], 'FontSize', 16);
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            
+            p1 = subplot(3,1,3); hold on;
+            plot(-complete_state(:,3),complete_state(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('V (ms-1)', 'FontSize', 16);
+            xlabel('y (m)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            %     ylim([-0.2 p1.YLim(2)]);
+            %     ylim([-0.2 0.6]);
+            yticks([floor(p1.YLim(1)):0.1:ceil(p1.YLim(2))]);
+            %     xticks([p1.XLim(1):0.1:0]);
+            
+            
+            p2 = subplot(3,1,2); hold on;
+            %     plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            plot(-complete_state(:,3),complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (s-1)', 'FontSize', 16);
+            %     ylabel('V_{gy} / y (1/s)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            %     xticks(p1.XLim(1):0.1:0);
+            
+            subplot(3,1,3)
+            linkaxes([p1, p2],'x');
+            if abs(floor((min(datacombined(:,3))/0.05))*0.05 - min(datacombined(:,3))) > 0.025
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05;
+            else
+                xmin = floor((min(datacombined(:,3))/0.05))*0.05-0.05;
+            end
+            xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            subplot(3,1,1);
+%             indx = find(abs(complete_state(:,3)-xmin) < 5e-3, 1, 'last');
+            ttt = datacombined(:,1)-complete_state(end,1);
+%             xlim([floor(min(ttt)*10)/10 ceil(max(ttt)*10)/10]);
+            xlim([floor(min(ttt)/0.5)*0.5 ceil(max(ttt)/0.5)*0.5]);
+            xticks([floor(min(ttt)/0.5)*0.5:0.25:ceil(max(ttt)/0.5)*0.5]);
+            
+%             output = -state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),6)./...
+%                 state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),3);
+%             input = -rrefEntrySegments_fac.rmean(ct2)*ones(length(output),1);
+%             dt = mean(diff(state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),1)));
+                        
+            fitPercents = [];
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                state_4entry = obj.state4rrefEntry;
+                state_entryRrefCombined = obj.stateEntryRrefCombined;
+                
+%                 output = r(intervals(ct,1):intervals(ct,3));
+%                 input = -obj.rref*ones(length(output),1);
+%                 dt = mean(diff(state_subset(:,1)));
+%                 data1 = iddata(output, input, dt);
+                
+%                 [num, den] = butter(2, fc/(1/dt/2),'low');
+                rFiltered = sysiddata{ct}.y;
+                
+                if length(tf)==1
+                    [rsim,fit,rsim0] = compare(sysiddata{ct}, tf);
+                else
+                    assert(length(tf) == size(intervals,1));
+                    [rsim,fit,rsim0] = compare(sysiddata{ct}, tf(:,:,ct));
+                end
+                
+                figure(plotHandles(1))
+                subplot(3,1,1);
+                plot(state_subset(:,1)-complete_state(end,1),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(state_4entry(:,1)-complete_state(end,1),state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(state_subset([1,end],1)-complete_state(end,1),[-obj.rref, -obj.rref],'LineWidth',2,'Color',[69 117 180]./255);
+                plot(t(intervals(ct,1):intervals(ct,3)),rFiltered,'LineWidth',2.5,'Color',[255 0 255]./255);
+                plot(t(intervals(ct,1):intervals(ct,3)),rsim.y,'LineWidth',1.5,'Color',[69 117 180]./255);
+                
+%                 plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(3,1,3);
+                plot(-state_4entry(:,3),state_4entry(:,6),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(-state_subset(:,3),state_subset(:,6),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                
+                plot(y(intervals(ct,1):intervals(ct,3)),rFiltered.*y(intervals(ct,1):intervals(ct,3)),'LineWidth',2.5,'Color',[255 0 255]./255);
+                plot(y(intervals(ct,1):intervals(ct,3)),rsim.y.*y(intervals(ct,1):intervals(ct,3)),'LineWidth',1.5,'Color',[69 117 180]./255);
+                
+                plot([0 -state_subset(1,3)],[0 -obj.rref*-state_subset(1,3)],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                subplot(3,1,2);
+                plot(-state_4entry(:,3),state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+                plot(-state_subset(:,3),state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                
+                %                      plot(state_subset(:,3),c(1)+c(2)*state_subset(:,6)./state_subset(:,3),'b','LineWidth',2);
+                
+                plot(y(intervals(ct,1):intervals(ct,3)),rFiltered,'LineWidth',2.5,'Color',[255 0 255]./255);
+                plot(y(intervals(ct,1):intervals(ct,3)),rsim.y,'LineWidth',1.5,'Color',[69 117 180]./255);
+                
+                plot([p1.XLim(1) -state_subset(1,3)],[-obj.rref -obj.rref],'--','LineWidth',2,'Color',[69 117 180]./255);
+                
+                fitPercents = [fitPercents fit];
+            end
+            figure(plotHandles(1))
+            subplot(3,1,1);
+            title(['r* : ' num2str(-1*[dataPerTrackExcerpt.rref],3) ', % fit: ' num2str(fitPercents,4)], 'FontSize', 16);
+
+            
+        end
+    
+        
+        function plotHandles = plot_rrefsEntry_with_time(obj, factor)
+            % Plots V vs t and V/y vs t highling change in r* within the same track
+            % excerpt with positive V
+            % This function plots time-window independent best intervals
+            
+            % factor - for which threshold factor plots are required to be
+            % produced
+            
+            assert(~isempty(obj.rrefEntrySegments) && length(factor) == 1);
+            ct_factor = find(abs([obj.rrefEntrySegments.factor] - factor) < 1e-6);
+            if isempty(ct_factor)
+                error('Can NOT find the r* entry intervals for the asked factor.');
+            end
+            intervals = obj.rrefEntrySegments(ct_factor).intervals;
+            if isempty(intervals)
+                plotHandles = [];
+                return;
+            end
+            
+            dataPerTrackExcerpt = struct.empty;
+            for ct=1:size(intervals,1)
+                dataPerTrackExcerpt(ct).state4rrefEstimate = obj.filteredState(intervals(ct,2):intervals(ct,3),:);
+                dataPerTrackExcerpt(ct).state4rrefEntry = obj.filteredState(intervals(ct,1):intervals(ct,2),:);
+                dataPerTrackExcerpt(ct).rref = obj.rrefEntrySegments(ct_factor).rref(ct);%mean(dataPerTrackExcerpt(ct).state4rrefEstimate(:,6)./dataPerTrackExcerpt(ct).state4rrefEstimate(:,3));
+            end
+            datacombined = [vertcat(dataPerTrackExcerpt.state4rrefEstimate); vertcat(dataPerTrackExcerpt.state4rrefEntry)];
+            
+            ymin = min(datacombined(:,3));
+            [~, indx_ymin] = min(abs(obj.filteredState(:,3)-ymin));
+            time_ymin = obj.filteredState(indx_ymin,1);
+            % Start from 0.06s data earlier than dataTrackExcerpt.filteredState(indx_ymax,1)
+            indx_start = find(obj.filteredState(:,1)-time_ymin<-0.06,1);
+            if isempty(indx_start)
+                indx_start = 1;
+            end
+            complete_state = obj.filteredState(indx_start:end,:);
+            tend = obj.filteredState(end,1);
+            
+            plotHandles = figure; hold on;
+%             plot(-complete_state(:,1)-tend,complete_state(:,6)./-complete_state(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+            ylabel('r (1/s)', 'FontSize', 16);
+            %     ylabel('V_{gy} / y (1/s)', 'FontSize', 16);
+            xlabel('t (s)', 'FontSize', 16);
+            set(gca, 'FontSize', 16); %grid on;
+            ylim([0 ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1))]);
+            yticks(0:1:ceil(-1*ceil(min(datacombined(:,6)./datacombined(:,3))-1)));
+            
+%             if abs(floor((min(datacombined(:,3))/0.05))*0.05 - min(datacombined(:,3))) > 0.025
+%                 xmin = floor((min(datacombined(:,3))/0.05))*0.05;
+%             else
+%                 xmin = floor((min(datacombined(:,3))/0.05))*0.05-0.05;
+%             end
+%             xlim([0 -xmin]);
+            %     xlim([0 Inf]);
+            
+            for ct=1:size(intervals,1)
+                obj = dataPerTrackExcerpt(ct);
+                state_subset = obj.state4rrefEstimate;
+                state_4entry = obj.state4rrefEntry;
+                figure(plotHandles(1))
+                plot(state_subset(:,1)-tend,state_subset(:,6)./-state_subset(:,3),'.','MarkerSize',12,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+                plot(state_4entry(:,1)-tend,state_4entry(:,6)./-state_4entry(:,3),'.','MarkerSize',12,'MarkerFaceColor',[161 217 155]./255, 'MarkerEdgeColor',[161 217 155]./255);
+            end
+            
+        end
+
         
 %         function compute_rref1(obj, params, factors, time_window)
 %             % params - [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}] = [sigma1 sigma2]
@@ -1354,5 +2221,31 @@ classdef filteredState_BlindLandingtrack < handle
 %             
 %         end
         
+    end
+    
+    methods(Static)
+        function in = IsInsideCylinder(p1, p2, radius, q)
+            % p1 - 1X3
+            % p2 - 1X3
+            % r - 1X1
+            % q - query points (NX3)
+            vec = p2-p1;
+            const = radius*norm(vec);
+            
+            in = dot(q-p1, repmat(vec,size(q,1),1), 2) >= 0 & ...
+                dot(q-p2, repmat(vec,size(q,1),1), 2) <= 0 & ...
+                sum((cross(q-p1, repmat(vec, size(q,1), 1))).^2,2).^0.5 <= const;
+            
+        end
+        
+        function dydt = const_drdt_movement(t, y, rdot)
+            % Differential equations governing flying at constant dr/dt 
+            % used in ode45 for integration
+            % rdot - the constant value of dr/dt at which bbee is flying
+            
+            dydt(1,1) = -y(2);
+            dydt(2,1) = (rdot*y(1)^2-y(2)^2)./y(1);
+            
+        end
     end
 end
