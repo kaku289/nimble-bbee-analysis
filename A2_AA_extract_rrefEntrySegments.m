@@ -156,23 +156,21 @@ keyboard;
 
 clc; close all;
 % clear;
-% 
-% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
+inputFile = 'C:/Pulkit/BlindLandingtracks_A3_LDF_rref_rrefEntry.mat';
+
 % load(inputFile);
-treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
-
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
-factors = [0.25:0.25:2.5];
+% factors = [0.25:0.25:2.5];
+factors = 1;
 
 data_all = struct.empty;
 
 clear data4est data4est_lowpass estimatedData data1 data1_filtered indexes; clc;
-data4est = cell(length(pattern), length(light), length(factors)); % Unmerged dataset
-data4est_lowpass = cell(length(pattern), length(light), length(factors)); % Unmerged dataset prefiltered with low bandpass filter 
+data4est = cell(length(winds), length(factors)); % Unmerged dataset
+data4est_lowpass = cell(length(winds), length(factors)); % Unmerged dataset prefiltered with low bandpass filter 
 fc = 5; % cut-off frequency in Hz (used for prefiltering the data)
 
 np = 1:3; % number of poles
@@ -189,111 +187,106 @@ pause(10)
 parfevalOnAll(gcp(), @warning, 0, 'off', 'Ident:estimation:transientDataCorrection')
 % parfevalOnAll(gcp(), @warning, 0, 'off', 'Ident:idmodel:size4isNotNX')
 tic
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
-        for ct_behaviour = 2%1:length(behaviour)
-            disp(' ');
-            disp(['Pattern: ' pattern{ct_pattern} ...
-                  ', light: ' light{ct_light} ...
-                  ', behaviour: ' behaviour{ct_behaviour}]);
+for ct_wind = 1:length(winds)
+    for ct_behaviour = 2%1:length(behaviour)
+        disp(' ');
+        disp(['Wind: ' winds(ct_wind) ...
+            ', behaviour: ' behaviour{ct_behaviour}]);
         
-           % Selecting relevant treatments
-            if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
-            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
-            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
-            else
-                error('What other treatments did you perform dude?')
-            end
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+        
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+        
+        %%%%%%%%%%%%%% Each light and pattern combination %%%%%%%%%%%
+        landingTracks = [relevantTreatments.landingTracks];
+        state_LDF = [landingTracks.state_LDF];
+        rrefEntrySegs = [state_LDF.rrefEntrySegments];
+        
+        landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+        landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+        
+        % Finding # of "tracks" (state LDFs) that contain rref entry segments
+        % for each factor
+        for ct_fac = 1:length(factors)
             
-            %%%%%%%%%%%%%% Each light and pattern combination %%%%%%%%%%%
-            landingTracks = [relevantTreatments.landingTracks];
-            state_LDF = [landingTracks.state_LDF];
-            rrefEntrySegs = [state_LDF.rrefEntrySegments];
+            factor = factors(ct_fac);
+            disp(['Running factor: ' num2str(factor)]);
             
-            landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
-            landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+            indices = arrayfun(@(x) ~isempty(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-factor)<1e-6).intervals),state_LDF);
             
-            % Finding # of "tracks" (state LDFs) that contain rref entry segments
-            % for each factor
-            for ct_fac = 1:length(factors)
+            data_all(ct_wind, ct_fac).tracks_fac = state_LDF(indices);
+            data_all(ct_wind, ct_fac).ct_wind = ct_wind;
+            data_all(ct_wind, ct_fac).ct_factor = factor;
+            data_all(ct_wind, ct_fac).landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+            
+            % Extract data for system identification
+            %                 clear estimatedData;
+            estimatedData.iddata = {};
+            estimatedData_prefiltered.iddata = {};
+            indexes = [];
+            
+            for ct1=1:length(data_all(ct_wind, ct_fac).tracks_fac)
+                state = data_all(ct_wind, ct_fac).tracks_fac(ct1).filteredState;
+                rrefEntrySegments_fac = data_all(ct_wind, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_wind, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
                 
-                factor = factors(ct_fac);
-                disp(['Running factor: ' num2str(factor)]);
-                
-                indices = arrayfun(@(x) ~isempty(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-factor)<1e-6).intervals),state_LDF);
-                
-                data_all(ct_pattern, ct_light, ct_fac).tracks_fac = state_LDF(indices);
-                data_all(ct_pattern, ct_light, ct_fac).ct_pattern = ct_pattern;
-                data_all(ct_pattern, ct_light, ct_fac).ct_light = ct_light;
-                data_all(ct_pattern, ct_light, ct_fac).ct_factor = factor;
-                data_all(ct_pattern, ct_light, ct_fac).landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
-                
-                % Extract data for system identification
-%                 clear estimatedData;
-                estimatedData.iddata = {};
-                estimatedData_prefiltered.iddata = {};
-                indexes = [];
-                
-                for ct1=1:length(data_all(ct_pattern, ct_light, ct_fac).tracks_fac)
-                    state = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).filteredState;
-                    rrefEntrySegments_fac = data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments(abs([data_all(ct_pattern, ct_light, ct_fac).tracks_fac(ct1).rrefEntrySegments.factor]-factor)<1e-6);
+                %                     assert(length(rrefEntrySegments_fac) == 1);
+                for ct2=1:size(rrefEntrySegments_fac.intervals,1)
+                    output = -state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),6)./...
+                        state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),3);
+                    input = -rrefEntrySegments_fac.rmean(ct2)*ones(length(output),1);
+                    dt = mean(diff(state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),1)));
                     
-%                     assert(length(rrefEntrySegments_fac) == 1);
-                    for ct2=1:size(rrefEntrySegments_fac.intervals,1)
-                        output = -state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),6)./...
-                            state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),3);
-                        input = -rrefEntrySegments_fac.rmean(ct2)*ones(length(output),1);
-                        dt = mean(diff(state(rrefEntrySegments_fac.intervals(ct2,1):rrefEntrySegments_fac.intervals(ct2,3),1)));
-                        
-                        [num, den] = butter(2, fc/(1/dt/2),'low');
-                        filt_output = filtfilt(num, den, output);
-                        
-                        data1 = iddata(output, input, dt);
-                        data1_filtered = iddata(filt_output, input, dt);
-                        
-                        estimatedData.iddata{end+1} = data1;
-                        estimatedData_prefiltered.iddata{end+1} = data1_filtered;
-                        
-                        indexes(end+1) = ct1;                        
-                    end
+                    [num, den] = butter(2, fc/(1/dt/2),'low');
+                    filt_output = filtfilt(num, den, output);
+                    
+                    data1 = iddata(output, input, dt);
+                    data1_filtered = iddata(filt_output, input, dt);
+                    
+                    estimatedData.iddata{end+1} = data1;
+                    estimatedData_prefiltered.iddata{end+1} = data1_filtered;
+                    
+                    indexes(end+1) = ct1;
                 end
-                data4est{ct_pattern, ct_light, ct_fac} = estimatedData;
-                data4est_lowpass{ct_pattern, ct_light, ct_fac} = estimatedData_prefiltered;
-                
-                data4est{ct_pattern, ct_light, ct_fac}.track_indexes = indexes;
-                data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes = indexes;
-                
-                % Run system Identification
-                dummy = idtf(zeros(0,0,0));
-                for ct2=1:size(nPZ,1)
-                    parfor ct1=1:length(estimatedData_prefiltered.iddata)
-                        dummy(:,:,ct1,ct2) = tfest(estimatedData_prefiltered.iddata{ct1}, nPZ(ct2,1), nPZ(ct2,2), opt);
-                    end
-                end
-                data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest = dummy;
-                
             end
+            data4est{ct_wind, ct_fac} = estimatedData;
+            data4est_lowpass{ct_wind, ct_fac} = estimatedData_prefiltered;
             
-           
+            data4est{ct_wind, ct_fac}.track_indexes = indexes;
+            data4est_lowpass{ct_wind, ct_fac}.track_indexes = indexes;
+            
+            % Run system Identification
+            dummy = idtf(zeros(0,0,0));
+            for ct2=1:size(nPZ,1)
+                parfor ct1=1:length(estimatedData_prefiltered.iddata)
+                    dummy(:,:,ct1,ct2) = tfest(estimatedData_prefiltered.iddata{ct1}, nPZ(ct2,1), nPZ(ct2,2), opt);
+                end
+            end
+            data4est_lowpass{ct_wind, ct_fac}.tfest = dummy;
             
         end
+        
+        
+        
     end
+    
 end
 toc
-keyboard
+% keyboard
 
-outputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation.mat';
-save(outputFile,'data4est','data4est_lowpass','data_all','');
+outputFile = 'C:/Pulkit/BlindLandingtracks_A3_LDF_rref_rrefEntryEstimation_everything_f1.mat';
+save(outputFile, '-v7.3', '-nocompression');
 keyboard;
 %%
 labels = cell(0, 1); % for x-axis of boxplots
