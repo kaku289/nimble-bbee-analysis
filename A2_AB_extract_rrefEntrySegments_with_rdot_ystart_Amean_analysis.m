@@ -1,3 +1,74 @@
+%% Plot actual accelerations
+clc;
+
+% factors = [0.25:0.25:2.5];
+factors = [1.5];
+for ct_factor=1:length(factors)
+    factor = factors(ct_factor);
+    
+    data_fac = data(abs([data.factor]-factor)<1e-6)';
+    hasTakeoff_fac = hasTakeoff(abs([data.factor]-factor)<1e-6)';
+    N = length(data_fac);
+    
+    % Create nominal and ordinal variables
+%     approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false);
+%     side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false);
+%     pattern = arrayfun(@(i) data_fac(i).pattern*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false) ;
+%     light = arrayfun(@(i) data_fac(i).light*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false);
+%     time = arrayfun(@(i) data_fac(i).time*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false);
+%     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false);
+    
+%     hasTakeoff_fac = arrayfun(@(i) hasTakeoff_fac(i)*ones(size(data_fac(i).intervals,1),1),1:N,'UniformOutput',false);
+    
+    
+end
+% Plotting acclerations for hastakeoff factor
+acc_actual_hastakeoff0 = vertcat(data_fac(hasTakeoff_fac==0).acc_actual);
+acc_actual_hastakeoff0 = vertcat(acc_actual_hastakeoff0{:});
+acc_actual_hastakeoff1 = vertcat(data_fac(hasTakeoff_fac==1).acc_actual);
+acc_actual_hastakeoff1 = vertcat(acc_actual_hastakeoff1{:});
+map = brewermap(3,'Set1'); 
+figure;
+histfit(acc_actual_hastakeoff1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+hold on;
+histogram(acc_actual_hastakeoff0,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+legend('From take-off','From free-flight','fontsize',16)
+xlabel('acc actual (m/s-2)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+axis tight
+
+acc_actual_light1 = vertcat(data_fac([data_fac.light] == 1).acc_actual);
+acc_actual_light1 = vertcat(acc_actual_light1{:});
+acc_actual_light3 = vertcat(data_fac([data_fac.light] == 3).acc_actual);
+acc_actual_light3 = vertcat(acc_actual_light3{:});
+map = brewermap(3,'Set1'); 
+figure;
+histogram(acc_actual_light1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+hold on;
+histogram(acc_actual_light3,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+legend('low light','high light','fontsize',16)
+xlabel('acc actual (m/s-2)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+axis tight
+
+
+% acc_rdotsim_hastakeoff0 = vertcat(data_fac(hasTakeoff_fac==0).acc_rdotsim);
+% acc_rdotsim_hastakeoff0 = vertcat(acc_rdotsim_hastakeoff0{:});
+% acc_rdotsim_hastakeoff1 = vertcat(data_fac(hasTakeoff_fac==1).acc_rdotsim);
+% acc_rdotsim_hastakeoff1 = vertcat(acc_rdotsim_hastakeoff1{:});
+% map = brewermap(3,'Set1'); 
+% figure;
+% histogram(acc_rdotsim_hastakeoff1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+% hold on;
+% histogram(acc_rdotsim_hastakeoff0,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+% legend('From take-off','From free-flight','fontsize',16)
+% xlabel('acc rdotsim (m/s-2)', 'FontSize', 16);
+% ylabel('Occurences', 'FontSize', 16);
+% set(gca, 'FontSize', 16);
+% axis tight
+
 %% Plot results from Amean model
 %% Plot statistical model from R
 close all;

@@ -41,6 +41,8 @@ classdef data4rrefEntry < handle
         delta_tentry;
         amean_entry;
         
+        acc_actual; % cell N by 1
+        acc_rdotsim; % cell N by 1
         
     end
      methods

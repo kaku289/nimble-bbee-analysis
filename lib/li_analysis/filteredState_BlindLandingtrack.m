@@ -1022,6 +1022,9 @@ classdef filteredState_BlindLandingtrack < handle
                     obj.rrefEntrySegments(ct).delta_Ventry(ct1,1) = diff(v_interval([1 end]));
                     obj.rrefEntrySegments(ct).delta_tentry(ct1,1) = diff(t_interval([1 end]));
                     obj.rrefEntrySegments(ct).amean_entry(ct1,1) = mean(a_interval);
+                    
+                    obj.rrefEntrySegments(ct).acc_actual{ct1,1} = a_interval;
+                    obj.rrefEntrySegments(ct).acc_rdotsim{ct1,1} = asim;
                 end
             end
             

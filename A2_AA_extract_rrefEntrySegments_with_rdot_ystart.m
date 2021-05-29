@@ -61,7 +61,7 @@ light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
-factors = [1];
+factors = [1.5];
 
 interval_for_rdot_estimate = [0.2 0.8]; % in percentage of rref
 for ct_pattern = 1:length(pattern)
@@ -201,7 +201,7 @@ delta_y_analytical = cell(0,1);
 delta_y_actual = cell(0,1);
 diff_delta_y = cell(0,1);
 
-factors = 1;
+factors = 1.5;
 
 pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};
