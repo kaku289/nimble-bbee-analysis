@@ -44,10 +44,15 @@ DirPlots_treatment = fullfile(DirPlots);
 
 % Defining parameters for rref estimate
 min_gap = 14; % the first straight line is between current point and (current point + min_gap)th point
-max_gap = 99;
+max_gap = 199;
+% from honeybee data
 params = [0.29 1.02]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
+% from bumblebee data
+% params = [0.53 4.22]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
+
 factors = [0.25:0.25:2.5];
-% factors = 1;
+% factors = [1:0.5:2.5];
+% factors = 1.5;
 time_window = [min_gap max_gap];
 
 % indexes_tracks_to_not_analyse = [18:51 148:158 167:176 189:199]; %due to y-offset 
@@ -85,7 +90,7 @@ for ct_treatment = 1:length(dataFiles)
             zeros(N, 12)];% 18 columns (obj_id	frame	timestamp	x	y	z	xvel	yvel	zvel P00	P01	P02	P11	P12	P22	P33	P44	P55)
         [~,pattern,~] = fileparts(dataFiles{ct_treatment}(ct).folder);
         landingTracks{ct_treatment}(ct).rawTrack = rawState_BlindLandingtrack(rawState, pattern);
-        landingTracks{ct_treatment}(ct).dt = 1/400;
+        landingTracks{ct_treatment}(ct).dt = 1/175; %1/400;
         landingTracks{ct_treatment}(ct).filterRawTracks(20);
         
         landingTracks{ct_treatment}(ct).raw_LDF = landingTracks{ct_treatment}(ct).rawTrack;
@@ -124,8 +129,43 @@ for ct_treatment = 1:length(dataFiles)
         if savePlots && has_no_yoffset
             for ct_factor=1:length(factors)
                 
-%                 plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs(factors(ct_factor));
-                plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs_parallax(factors(ct_factor));
+                
+                % Save y,V,A,r vs t curve and V,r vs y curve for Figure 1
+%                 track_info = '2810051100 2 05 -b';
+%                 if strcmpi(dataFiles{ct_treatment}(ct).name(1:end-4),track_info) && strcmpi(pattern, 'Random Julesz')
+%                     t_start = landingTracks{ct_treatment}(ct).state_LDF.filteredState(1,1)
+%                     plotHandles = BlindLandingtrack.plotDataLDF_Time3_forArticle(landingTracks{ct_treatment}(ct).state_LDF, ...
+%                         t_start)
+%                     figure(plotHandles);
+%                     subplot(4,1,1); grid off
+%                     ylim([0 0.6]);
+%                     yticks([0:0.2:0.6]);
+%                     subplot(4,1,2); grid off
+%                     ylim([-0.2 1.5]);
+%                     yticks([0:0.5:1.5]);
+%                     subplot(4,1,3); grid off
+%                     ylim([-4 4]);
+%                     yticks([-4:4:4]);
+%                     subplot(4,1,4); grid off
+%                     ylim([0 8]);
+%                     yticks([0:2:8]);
+%                     
+%                     plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_states();
+%                     figure(plotHandles);
+%                     subplot(2,1,1); grid off
+%                     ylim([0 1.5]);
+%                     yticks([0:0.5:1.5]);
+%                     subplot(2,1,2); grid off
+%                     ylim([0 8]);
+%                     yticks([0:2:8]);
+%                 else
+%                     plotHandles = [];
+%                 end
+                
+                
+                
+                plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs(factors(ct_factor));
+%                 plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs_parallax(factors(ct_factor));
                 %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
                 %             plotHandles = landingTracks(ct).state_LDF.plot_states();
                 if ~isempty(plotHandles)
@@ -133,8 +173,8 @@ for ct_treatment = 1:length(dataFiles)
                     % Resizing the figures
                     for i=1:length(plotHandles)
                         plotHandles(i).Position(3) = 680;
-%                         plotHandles(i).Position(4) = 545;
-                        plotHandles(i).Position(4) = 800;
+                        plotHandles(i).Position(4) = 545;
+%                         plotHandles(i).Position(4) = 800;
                         
                         if i==1
                             figureName = ['fac_' num2str(factors(ct_factor),'%0.2f') '_' ...
@@ -148,6 +188,11 @@ for ct_treatment = 1:length(dataFiles)
                             print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
                                 '.png','.pdf'), '-dpdf');
                         end
+                        
+                        
+                        
+                                
+                        
                     end
                     
                     close(plotHandles);
@@ -194,9 +239,10 @@ data = data(indices);
 % This file contains data for all the factors
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_all_rref_Rstudio.txt';
+r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_all_rref_Rstudio_hbeeParams.txt';
 factors = [0.25:0.25:2.5];
 data_write = [];
+beeID = {};
 for ct_factor=1:length(factors)
     factor = factors(ct_factor);
     
@@ -204,10 +250,16 @@ for ct_factor=1:length(factors)
     N = length(data_fac);
     
     % Create nominal and ordinal variables (numeric data)
+    approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     flightID = arrayfun(@(i) data_fac(i).flightID*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     setID = arrayfun(@(i) data_fac(i).setID*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     day = arrayfun(@(i) data_fac(i).day*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
     patternnum = arrayfun(@(i) data_fac(i).patternnum*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
+    
+    for i=1:N
+         dummy = arrayfun(@(x) data_fac(i).beeID, 1:size(data_fac(i).intervals_ti,1), 'UniformOutput', false);
+         beeID = [beeID; dummy'];
+    end
     
 %     approach = arrayfun(@(i) i*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
 %     side = arrayfun(@(i) data_fac(i).side*ones(size(data_fac(i).intervals_ti,1),1),1:N,'UniformOutput',false);
@@ -220,7 +272,7 @@ for ct_factor=1:length(factors)
 %     speed3d = vertcat(data_fac.speed3d_mean_ti);
 
     data_write = [data_write; ...
-        vertcat(flightID{:}) vertcat(setID{:}) vertcat(day{:}) ...
+        vertcat(approach{:}) vertcat(flightID{:}) vertcat(setID{:}) vertcat(day{:}) ...
         vertcat(patternnum{:}) y r v factor*ones(size(r,1),1)];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
@@ -228,12 +280,14 @@ for ct_factor=1:length(factors)
           ', # tracks with >1 r*: ' num2str(N1)]);
 end
 
-data_write(:,9) = ones(length(data_write),1);
-data_write(data_write(:,4) == 4 | data_write(:,4) == 11,9) = 0;
+% % % expansioncue variable
+% % data_write(:,9) = ones(length(data_write),1);
+% % data_write(data_write(:,4) == 4 | data_write(:,4) == 11,9) = 0;
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'flightID','setID','day','patternnum','y','r','v','threshold','expansioncue'});
+        'VariableNames',{'approach','flightID','setID','day','patternnum','y','r','v','threshold'});
+    T.beeID = beeID;
     writetable(T,r_file);
 end
 
@@ -357,11 +411,13 @@ inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLa
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
-landingTracks = landing_tracks([landing_tracks.patternnum] <= 11);
+static_patternnums = [1 2 3 4 5 6 10 11 18];
+landingTracks = landing_tracks(arrayfun(@(x) ismember(x,static_patternnums), [landing_tracks.patternnum]));
+% landingTracks = landing_tracks([landing_tracks.patternnum] <= 11);
 
 % Loading data and collecting segments with rref
 factors = [0.25:0.25:2.5];
-chosen_fac = 1;
+chosen_fac = 1.5;
 
 data = struct.empty;
 clear dummy;
@@ -427,7 +483,7 @@ end
 
 % % Landing Disc
 % [X,Y,Z] = cylinder(treatment.landingDiscs(1).radius);
-radius = 0.60; % verify this
+radius = 0.30; % in m
 
 figure(trajPlot);
 % h=mesh(X,Y,Z,'facecolor',[1 0 0]); % draw landing disc
@@ -441,8 +497,8 @@ xlim([-0.3 0.3]);
 xticks([-0.3:0.1:0.3]);
 ylim([0 0.6]);
 yticks([0:0.1:0.6]);
-zlim([-0.2 0.4]);
-zticks([-0.2:0.1:0.4]);
+zlim([-0.3 0.3]);
+zticks([-0.3:0.1:0.3]);
 set(gca, 'FontSize', 16);
 view(0,90);
 view(-90,0);
@@ -481,7 +537,7 @@ dummy = abs(vertcat(data.fd_analytical_ti)-vertcat(data.fd_actual_ti));
 figure;
 % histogram(-vertcat(data.rmean), [0:0.5:8]);
 % histogram(-vertcat(data.rmean), [0:0.5:9.5]);
-histfit(-vertcat(data.rmean),[],'Gamma')
+histfit(-vertcat(data.rmean),13,'gamma')
 xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
 ylabel('Occurences', 'FontSize', 16);
 set(gca, 'FontSize', 16);
@@ -489,6 +545,220 @@ dummy = -vertcat(data.rmean);
 [mean(dummy) median(dummy) max(dummy) min(dummy)]
 pd = fitdist(dummy,'Gamma');
 
+%% Panel d for Figure 4 (ymean vs rref)
+% plotted only for tracks containing >1 r* segments
+
+close all; clc;
+saveDir = '/home/reken001/Pulkit/graphs_temp';
+cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
+
+
+delta_rrref_posjumps = cell(length(data),1); % change in rref between two consecutive rref segments
+delta_rrref_negjumps = cell(length(data),1); % change in rref between two consecutive rref segments
+
+ratio_rrref_posjumps = cell(length(data),1); % change in rref between two consecutive rref segments
+ratio_rrref_negjumps = cell(length(data),1); % change in rref between two consecutive rref segments
+
+data_ymean = {}; data_rmean = {};
+for ct=1:length(data)
+    has_multiple_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)>1,data(ct).tracks_fac);
+    
+    N = sum(has_multiple_rrefs);
+    data_ss = data(ct).tracks_fac(has_multiple_rrefs);
+    
+    rmean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data_ss,'UniformOutput',false);
+
+    ymean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data_ss,'UniformOutput',false);
+    
+    data_ymean{end+1} = ymean;
+    data_rmean{end+1} = rmean;
+    
+    landingTracks = data(ct).landingTrack(has_multiple_rrefs);
+%     track_indx = arrayfun(@(x) x*ones(length(data_ss(x).rrefSegments(abs([data_ss(x).rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti),1),1:N,'UniformOutput',false);
+    
+    jumps = cell(size(ymean));
+    jump_ratios = cell(size(ymean));
+    disp(['# of tracks with >1 r* segments for chosen factor: ' num2str(N)]);
+    plotHandle = figure; hold on;
+    for ct1=1:N
+        
+%         figure(plotHandle);
+        % Exclude tracks wherein bbee moves back and forth between landing
+        % platforms
+%         if any(abs(diff(data_ss(ct1).filteredState(data_ss(ct1).filteredState(:,6) > 0,3))) > 0.05)
+%             continue;
+%         end
+        
+        y_r = sortrows([-[ymean{ct1}] -[rmean{ct1}]],1,'descend');
+        
+        % Finding whether the next r* is higher or lower
+        jumps{ct1} = diff(y_r);
+        jump_ratios{ct1} = y_r(2:end,2)./y_r(1:end-1,2);
+        
+        % Plot straight line
+% % %         plot(-[ymean{ct1}], -[rmean{ct1}] ...
+% % %         ,'Color', [225 225 225]./255/2,'LineWidth',1);
+        if rem(ct1,10) == 1
+            plot(-[ymean{ct1}], -[rmean{ct1}] ...
+            ,'Color', [225 225 225]./255/2,'LineWidth',1);
+        end
+    
+        
+        % Highlight data points
+% % %         scatter(-[ymean{ct1}], -[rmean{ct1}],5,...
+% % %         'k','filled','o');
+% %         
+        color_indx = 1:1:length(ymean{ct1});
+        color_indx(color_indx > 3) = 3;
+        scatter(-[ymean{ct1}], -[rmean{ct1}],10,...
+        cmap(color_indx,:),'filled','o');
+    
+% % %         % Plot only negative jumps
+% % %         if any(jumps{ct1}(:,2)<-2)
+% % %             plot(-[ymean{ct1}], -[rmean{ct1}] ...
+% % %             ,'Color', [225 225 225]./255/2,'LineWidth',1);
+% % %         end
+% % 
+
+        
+    end
+    disp(['# r*segments in tracks with >1 r* segments for chosen fac: ' num2str(length(vertcat(ymean{:})))]);
+    
+    dummy = vertcat(jumps{:});
+    delta_rrref_posjumps{ct} = dummy(dummy(:,2)>0,2);
+    delta_rrref_negjumps{ct} = dummy(dummy(:,2)<0,2);
+    
+    dummy1 = vertcat(jump_ratios{:});
+    assert(sum((dummy1>1) == (dummy(:,2)>0)) == length(dummy1))
+    ratio_rrref_posjumps{ct} = dummy1(dummy1>1);
+    ratio_rrref_negjumps{ct} = dummy1(dummy1<1);
+    
+    disp(['# of +ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)>0))]);
+    disp(['# of -ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)<0))]);
+    
+    disp(['% of # of +ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)>0)/(sum(dummy(:,2)<0)+sum(dummy(:,2)>0)))]);
+    disp(['% of # of -ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)<0)/(sum(dummy(:,2)<0)+sum(dummy(:,2)>0)))]);
+    
+    disp(['Mean +ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)>0, 2)))]);
+    disp(['Mean -ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)<0, 2)))]);
+    
+    plotHandle.Position(3) = 680; plotHandle.Position(4) = 545;
+    
+    figure(plotHandle);
+    
+    set(gca, 'FontSize', 16);
+    ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+    xlabel('y* (m)', 'FontSize', 16);
+    
+%     print(plotHandle, fullfile(saveDir,['multiple_rrefs_' pattern{data(ct).ct_pattern} '_' light{data(ct).ct_light}]), '-dpdf');
+
+end
+
+plotHandle1 = figure; hold on;
+% cmap = [1 0 0; 0 1 0; 0 0 1];
+cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
+for ct=1:length(data_ymean)
+    for ct1=1:length(data_ymean{ct})
+% %         if rem(ct1,15) == 1
+% %             plot(-[ymean{ct1}], -[rmean{ct1}] ...
+% %                 ,'Color', [225 225 225]./255/2,'LineWidth',1);
+% %         end
+
+        color_indx = 1:1:length(data_ymean{ct}{ct1});
+        color_indx(color_indx > 3) = 3;
+        scatter(-[data_ymean{ct}{ct1}], -[data_rmean{ct}{ct1}],10,...
+                cmap(color_indx,:),'filled','o');
+    end
+end
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+% Plot fit averaged over all light conditions
+ymean = arrayfun(@(x) vertcat(data_ymean{x}{:}), 1:length(data_ymean), 'UniformOutput', false);
+ymean = vertcat(ymean{:});
+y_vec = min(-ymean):0.001:max(-ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+Coefficients = [-0.8945715 -0.7468271]; % from R
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', [0 0 0], 'LineWidth', 2);
+
+
+[mean(vertcat(delta_rrref_posjumps{:})) std(vertcat(delta_rrref_posjumps{:}))]
+length(vertcat(delta_rrref_posjumps{:}))
+[mean(vertcat(delta_rrref_negjumps{:})) std(vertcat(delta_rrref_negjumps{:}))]
+length(vertcat(delta_rrref_negjumps{:}))
+
+delta_rref_per_treatment_mean = arrayfun(@(x) [mean(vertcat(delta_rrref_posjumps{x})) mean(vertcat(delta_rrref_negjumps{x}))], 1:length(delta_rrref_posjumps), 'UniformOutput', false);
+delta_rref_per_treatment_mean = vertcat(delta_rref_per_treatment_mean{:})
+
+figure;
+histogram([vertcat(delta_rrref_posjumps{:}); vertcat(delta_rrref_negjumps{:})])
+% histfit([vertcat(delta_rrref_posjumps{:}); vertcat(delta_rrref_negjumps{:})], [], 'Gamma')
+xlabel('\Delta r*', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+[mean(vertcat(ratio_rrref_posjumps{:})) std(vertcat(ratio_rrref_posjumps{:}))]
+[mean(vertcat(ratio_rrref_negjumps{:})) std(vertcat(ratio_rrref_negjumps{:}))]
+
+dummy = cellfun(@(x) [mean(x) std(x)],delta_rrref_posjumps,'UniformOutput',false);
+dummy = vertcat(dummy{:})
+for ct=1:6
+    disp([num2str(dummy(ct,1),'%0.3f') ' [' num2str(dummy(ct,2),'%0.3f') ']']);
+end
+dummy =cellfun(@(x) [mean(x) std(x)],delta_rrref_negjumps,'UniformOutput',false);
+vertcat(dummy{:})
+dummy =cellfun(@(x) [mean(x) std(x)],ratio_rrref_posjumps,'UniformOutput',false);
+vertcat(dummy{:})
+dummy =cellfun(@(x) [mean(x) std(x)],ratio_rrref_negjumps,'UniformOutput',false);
+vertcat(dummy{:})
+
+
+%% Panel d for Figure 4 (ymean vs rref)
+% plotted for all tracks
+
+close all; clc;
+saveDir = '/home/reken001/Pulkit/graphs_temp';
+cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
+
+data_ymean = {}; data_rmean = {};
+for ct=1:length(data)
+    
+    data_ss = data(ct).tracks_fac;
+    
+    rmean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data_ss,'UniformOutput',false);
+
+    ymean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data_ss,'UniformOutput',false);
+    
+    data_ymean{end+1} = ymean;
+    data_rmean{end+1} = rmean;
+end
+
+plotHandle1 = figure; hold on;
+% cmap = [1 0 0; 0 1 0; 0 0 1];
+cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
+for ct=1:length(data_ymean)
+    for ct1=1:length(data_ymean{ct})
+% %         if rem(ct1,15) == 1
+% %             plot(-[ymean{ct1}], -[rmean{ct1}] ...
+% %                 ,'Color', [225 225 225]./255/2,'LineWidth',1);
+% %         end
+
+        color_indx = 1:1:length(data_ymean{ct}{ct1});
+        color_indx(color_indx > 3) = 3;
+        scatter(-[data_ymean{ct}{ct1}], -[data_rmean{ct}{ct1}],10,...
+                cmap(color_indx,:),'filled','o');
+    end
+end
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+% Plot fit averaged over all light conditions
+ymean = arrayfun(@(x) vertcat(data_ymean{x}{:}), 1:length(data_ymean), 'UniformOutput', false);
+ymean = vertcat(ymean{:});
+y_vec = 0.05:0.001:max(-ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+Coefficients = [0.78618 -0.21784]; % from R
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', [0 0 0], 'LineWidth', 2);
 
 
 %% Plot ymean vs rmean

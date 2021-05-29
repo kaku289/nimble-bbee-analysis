@@ -1,53 +1,270 @@
 %% Plotting trajectories and mean approach for ALL tracks
 %
 
-% Extract all approaches
-close all; clc;
-% clear;
-inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
-% load(inputFile);
-
-
-% to open/modify the Matlab text editor sessions
-addpath('./lib/EditorSessionManager');
-
-% to generate colormaps
-addpath('./lib/DrosteEffect-BrewerMap-221b913');
-
 % to add definition of classes being used for this analysis
 addpath('./lib/li_analysis');
-
-% to include class definitions used in videoscorer_data
-addpath('./lib/video_scorer/');
-% rmpath('./lib/video_scorer/Source');
 
 % to include higher order accurate differentiation function
 addpath('./lib/diffxy');
 
-% to include fmf reader
-addpath('./lib/flymovieformat');
-
-% to include hline and vline function
-addpath('./lib/hline_vline');
-
 %%
 
+clc; close all;
+clear dummy
+% clear;
+
+inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+% load(inputFile);
+
+landing_tracks = [landingTracks{:}];
+patternnums = unique([landing_tracks.patternnum]);
+
+patternKey = cell(1,length(patternnums));
+data_all = struct.empty;
+for ct_pattern = 1:length(patternnums)
+    dummy.state_LDF = [landing_tracks([landing_tracks.patternnum]==patternnums(ct_pattern)).state_LDF];
+    dummy.patternnum = (patternnums(ct_pattern))*ones(1, length(dummy.state_LDF));
+    dummy.setID = [landing_tracks([landing_tracks.patternnum]==patternnums(ct_pattern)).setID];
+    dummy.flightID = [landing_tracks([landing_tracks.patternnum]==patternnums(ct_pattern)).flightID];
+    dummy.beeID = {landing_tracks([landing_tracks.patternnum]==patternnums(ct_pattern)).beeID};
+    data_all = [data_all; dummy];
+    
+    tracks = landing_tracks([landing_tracks.patternnum]==patternnums(ct_pattern));
+    patternKey{ct_pattern} = tracks(1).pattern;
+    % Save additional data
+%     [data1.day] = deal(landing_tracks(ct_track).datenum);
+%     [data1.pattern] = deal(landing_tracks(ct_track).pattern);
+%     [data1.patternnum] = deal(landing_tracks(ct_track).patternnum);
+%     [data1.setID] = deal(landing_tracks(ct_track).setID);
+%     [data1.beeID] = deal(landing_tracks(ct_track).beeID);
+%     [data1.flightID] = deal(landing_tracks(ct_track).flightID);
+    
+%     data = [data data1];
+end
+
+
+for ct=1:length(data_all)
+    data_all(ct).filteredStates_all = struct.empty;
+    for ct1=1:1:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+        data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState;
+    end
+end
+
+%% Plot overall average approach
+close all;
+ybins = -0.5:0.005:-0.01;
+tracks = [data_all.filteredStates_all];
+data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+data_xyzuvw = vertcat(data_xyzuvw{:});
+xyzuvw = [];
+y = [];
+sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+r = [];
+sem_r = [];
+for ct=1:length(ybins)-1
+    dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+    y = [y; mean(ybins(ct:ct+1))];
+    xyzuvw = [xyzuvw; mean(dummy)];
+    r = [r; mean(dummy(:,5)./dummy(:,2))];
+    sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+%     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+    sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+%     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+end
+
+figure; hold on;
+yrange = [0.15 0.35]; 
+% rref_R = 3.56; % from  analysis in R
+
+subplot(2,1,1); hold on;
+% plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
+% plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
+fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))],[252,187,161]./255, 'EdgeColor', [252,187,161]./255);
+plot(-y,xyzuvw(:,5),'Color',[252,187,161]./255,'Linewidth',1);
+ylabel('V (m/s)', 'FontSize', 16);
+xlabel('y (m)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+ylim([0 1.5]);
+yticks([0:0.5:1.5]);
+xlim([0 0.55]);
+xticks([0:0.1:0.5]);
+
+% y_in_yrange = -y(-y>=yrange(1) & -y<=yrange(2));
+% plot(y_in_yrange, xyzuvw(-y>=yrange(1) & -y<=yrange(2), 5),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+% plot(y_in_yrange, rref_R*y_in_yrange,'LineWidth',2,'Color',[69 117 180]./255);
+% plot([0 y_in_yrange(end)],[0 rref_R*y_in_yrange(end)],'--','LineWidth',2,'Color',[69 117 180]./255);
+% title(['r* : ' num2str(rref_R,3)], 'FontSize', 16);
+
+subplot(2,1,2); hold on;
+a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)],[252,187,161]./255, 'EdgeColor', [252,187,161]./255);
+plot(-y,-r,'Color',[252,187,161]./255,'Linewidth',1);
+ylabel('r (s-1)', 'FontSize', 16);
+xlabel('y (m)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+ylim([0 6]);
+yticks([0:2:6]);
+xlim([0 0.55]);
+xticks([0:0.1:0.5]);
+
+% plot(y_in_yrange, -r(-y>=yrange(1) & -y<=yrange(2)),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+% plot(y_in_yrange, rref_R*ones(length(y_in_yrange),1),'LineWidth',2,'Color',[69 117 180]./255);
+% plot([0 y_in_yrange(end)],[rref_R rref_R],'--','LineWidth',2,'Color',[69 117 180]./255);
+
+%% %%%%%%%%%%% Plot average approach for different patterns
+close all;
+ybins = -0.5:0.005:-0.01;
+
+patternGroups = {[1,2,7,8,9], [3,4,6,11], [5,10,18], [1,2], [7,8,9], [4,5,6]};
+ct_patternGroup = 6;
+
+patternGroup = patternGroups{ct_patternGroup};
+cmap = lines(length(patternGroup));
+% cmap([2 5],:) = [];
+% colors = [cmap; 1 0 1; 1 0 0];
+colors = cmap;
+
+fig1 = figure; hold on;
+patterns = patternGroup;
+pattern_order_in_data_all = arrayfun(@(x) x.patternnum(1), data_all);
+for ct_pattern=1:length(patterns)
+%     tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).patternnum == ct_pattern),patterns, 'UniformOutput', false);
+    tracks = data_all(pattern_order_in_data_all==patterns(ct_pattern)).filteredStates_all; %[tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
+    data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+    data_xyzuvw = vertcat(data_xyzuvw{:});
+    xyzuvw = [];
+    y = [];
+    sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+    r = [];
+    sem_r = [];
+    for ct=1:length(ybins)-1
+        dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+        y = [y; mean(ybins(ct:ct+1))];
+        xyzuvw = [xyzuvw; mean(dummy)];
+        r = [r; mean(dummy(:,5)./dummy(:,2))];
+        sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+        %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+        sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+        %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+    end
+    
+    
+    
+    
+    subplot(2,1,1); hold on;
+    % plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
+    % plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
+    fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_pattern,:), 'EdgeColor', colors(ct_pattern,:));
+%     plot(-y,xyzuvw(:,5),'Color',[252,187,161]./255,'Linewidth',1);
+    
+%     y_in_yrange = -y(-y>=yrange(1) & -y<=yrange(2));
+%     plot(y_in_yrange, xyzuvw(-y>=yrange(1) & -y<=yrange(2), 5),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+%     plot(y_in_yrange, rref_R*y_in_yrange,'LineWidth',2,'Color',[69 117 180]./255);
+%     plot([0 y_in_yrange(end)],[0 rref_R*y_in_yrange(end)],'--','LineWidth',2,'Color',[69 117 180]./255);
+%     title(['r* : ' num2str(rref_R,3)], 'FontSize', 16);
+    
+    subplot(2,1,2); hold on;
+    a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_pattern,:), 'EdgeColor', colors(ct_pattern,:));
+%     plot(-y,-r,'Color',[252,187,161]./255,'Linewidth',1);
+    
+    % ylim([0 0.3]);
+    % yticks([0:0.1:0.3]);
+%     xlim([0 0.32]);
+%     plot(y_in_yrange, -r(-y>=yrange(1) & -y<=yrange(2)),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+%     plot(y_in_yrange, rref_R*ones(length(y_in_yrange),1),'LineWidth',2,'Color',[69 117 180]./255);
+%     plot([0 y_in_yrange(end)],[rref_R rref_R],'--','LineWidth',2,'Color',[69 117 180]./255);
+
+
+end
+
+figure(fig1);
+subplot(2,1,1);
+ylabel('V (ms-1)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+ylim([0 1.5]);
+yticks([0:0.5:1.5]);
+xlim([0 0.55]);
+xticks([0:0.1:0.5]);
+subplot(2,1,2);
+ylabel('r (s-1)', 'FontSize', 16);
+xlabel('y (m)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(0.15); xline(0.35);
+ylim([0 6]);
+yticks([0:2:6]);
+xlim([0 0.55]);
+xticks([0:0.1:0.5]);
+legend(patternKey(arrayfun(@(x) find(x==patternnums),patterns)));
+
+
+%%  Write file for analysis of average tracks in R 
+writeFile = true;
+r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_all_trajs_Rstudio.txt';
+data_write = [];
+approach_no = 0;
+yrange = [-0.35 -0.15];
+beeID = {};
+if writeFile
+    for ct=1:length(data_all)
+        for ct1=1:1:length(data_all(ct).state_LDF)
+            dummy_y = data_all(ct).state_LDF(ct1).filteredState(:,3); % the complete trajectory
+%             [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+% 
+%             % create other variables
+%             y = -data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end, 3);
+%             v = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end, 6);
+            
+            y = -data_all(ct).state_LDF(ct1).filteredState(dummy_y >= yrange(1) & dummy_y <=yrange(2), 3);
+            v = data_all(ct).state_LDF(ct1).filteredState(dummy_y >= yrange(1) & dummy_y <=yrange(2), 6);
+            r = v./y;
+
+            N = length(r);
+            
+            approach_no = approach_no + 1;
+            approach = approach_no*ones(N, 1);
+            
+            % Create nominal and ordinal variables
+            pattern = data_all(ct).patternnum(ct1)*ones(N, 1);
+            setID = data_all(ct).setID(ct1)*ones(N, 1);
+            flightID = data_all(ct).flightID(ct1)*ones(N, 1);
+            dummy = arrayfun(@(x) data_all(ct).beeID{ct1}, 1:N, 'UniformOutput', false);
+            beeID = [beeID; dummy'];
+            
+            data_write = [data_write; ...
+                approach pattern setID flightID y r v];
+
+        end
+    end
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'approach','pattern','setID','flightID','y','r','v'});
+    T.beeID = beeID;
+    writetable(T,r_file);
+end
+
+
+
+
+%% Code below not used
 winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
-data_all = struct.empty;
 
-for ct_wind = 1:length(winds)
+for ct_pattern = 1:length(winds)
         for ct_behaviour = 2%1:length(behaviour)
             clear dummy;
             
-            disp(['Wind: ' num2str(winds(ct_wind)) ...
+            disp(['Wind: ' num2str(winds(ct_pattern)) ...
                   ', behaviour: ' behaviour{ct_behaviour}]);
               
             % Selecting relevant treatments
             if strcmpi(behaviour{ct_behaviour}, 'rising')
                 relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
             elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                relevantTreatments = treatments( [treatments.wind] == winds(ct_pattern) & ...
                                      rem(1:length(treatments), 8)>1 & ...
                                      rem(1:length(treatments), 8)<8);
                 hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
@@ -81,7 +298,7 @@ for ct_wind = 1:length(winds)
             dummy.state_LDF = [landingTracks.state_LDF];
 %             dummy.pattern = (ct_pattern)*ones(1, length(dummy.state_LDF));
 %             dummy.light = (ct_light)*ones(1, length(dummy.state_LDF));
-            dummy.wind = (ct_wind)*ones(1, length(dummy.state_LDF));
+            dummy.wind = (ct_pattern)*ones(1, length(dummy.state_LDF));
             dummy.day = days';
             dummy.time = startTimes';
             
@@ -381,8 +598,8 @@ colors = [cmap; 1 0 1; 1 0 0];
 fig1 = figure; hold on;
 winds = unique([data_all.wind]);
 yrange = [0.02 0.12];
-for ct_wind=1:length(data_all)
-    tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).wind == ct_wind),1:length(data_all), 'UniformOutput', false);
+for ct_pattern=1:length(data_all)
+    tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).wind == ct_pattern),1:length(data_all), 'UniformOutput', false);
     tracks = [tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
     data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
     data_xyzuvw = vertcat(data_xyzuvw{:});
@@ -408,7 +625,7 @@ for ct_wind=1:length(data_all)
     subplot(2,1,1); hold on;
     % plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
     % plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
-    fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+    fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_pattern,:), 'EdgeColor', colors(ct_pattern,:));
 %     plot(-y,xyzuvw(:,5),'Color',[252,187,161]./255,'Linewidth',1);
     
 %     y_in_yrange = -y(-y>=yrange(1) & -y<=yrange(2));
@@ -418,7 +635,7 @@ for ct_wind=1:length(data_all)
 %     title(['r* : ' num2str(rref_R,3)], 'FontSize', 16);
     
     subplot(2,1,2); hold on;
-    a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+    a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_pattern,:), 'EdgeColor', colors(ct_pattern,:));
 %     plot(-y,-r,'Color',[252,187,161]./255,'Linewidth',1);
     
     % ylim([0 0.3]);
