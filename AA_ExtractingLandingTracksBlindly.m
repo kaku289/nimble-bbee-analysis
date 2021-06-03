@@ -91,7 +91,7 @@ for ct_day=1:size(treatmentSchedule,2)
 end
 
 %% Read hotwire data files
-createHWplots = true;
+createHWplots = false;
 plotDir = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/hotwire';
 hotwireFiles = dir(fullfile(rootDir, hotwirDir, '2019*.csv'));
 
@@ -518,6 +518,420 @@ end
 save(fullfile(rootDir, trackingDir, 'BlindLandingtracks_A3.mat'), 'treatments');
 keyboard;
 
+%% Finding landing and aborted landing tracks in each treatment
+% inputFile = fullfile(rootDir, trackingDir, 'BlindLandingtracks_intermediateData_A3.mat');
+% load(inputFile);
+
+y_margin = 0.02; % in m
+Vgy_margin = 0.25; % % in m/s
+time_margin = 1.5; % in s
+frame_margin = 10; % two points across y=10 m plane should be within frame_margin from each other
+
+% Getting list of tracking files
+tracking_files = dir(fullfile(rootDir, trackingDir, ['*mainbrain.offline']));
+
+filenums = num2cell(cellfun(@(x) str2double(x(10:15)), {tracking_files(:).name}));
+[tracking_files.filenum] = filenums{:}; % length of folders is not same as treatments array!
+
+datenums = num2cell(cellfun(@(x) str2double(x(1:8)), {tracking_files(:).name}));
+[tracking_files.datenum] = datenums{:}; % length of folders is not same as treatments array!
+
+for ct_treatment=1:length(treatments) % for each treatment
+    treatment = treatments(ct_treatment); % Always remember working by reference here
+    
+    
+    
+    % Find tracking files (also in case multiple files exist)
+    % corresponding to this treatment
+    treatment.trackingFiles = tracking_files(...
+        [tracking_files(:).filenum] >= treatment.startTime & ...
+        [tracking_files(:).filenum] <= treatment.endTime & ...
+        [tracking_files(:).datenum] == treatment.datenum);
+    
+    if isempty(treatment.trackingFiles)
+        continue;
+    end
+    
+    % Pick any treatment tracking file - as all of them will
+    % have same calibration file
+    treatment.calib = FlydraCalibration(fullfile(treatment.trackingFiles(1).folder, treatment.trackingFiles(1).name, filecalib));
+    
+    % compute center of all landing discs for this treatment
+    for ct_landingDiscs = 1:length(treatment.landingDiscs)
+        treatment.landingDiscs(ct_landingDiscs).computeCenter(treatment.calib);
+        if strcmpi(treatment.landingDiscs(ct_landingDiscs).side,'Hive')
+           y_hiveDisc = treatment.landingDiscs(ct_landingDiscs).center(2);
+           center_hiveDisc = treatment.landingDiscs(ct_landingDiscs).center;
+           radius_hiveDisc = treatment.landingDiscs(ct_landingDiscs).radius;
+        elseif strcmpi(treatment.landingDiscs(ct_landingDiscs).side,'Feeder')
+           y_feederDisc = treatment.landingDiscs(ct_landingDiscs).center(2);
+           center_feederDisc = treatment.landingDiscs(ct_landingDiscs).center;
+           radius_feederDisc = treatment.landingDiscs(ct_landingDiscs).radius;
+        end
+    end
+    disc_centers = [treatment.landingDiscs.center];
+    landingDiscs = treatment.landingDiscs;
+%     boundingBox = [min(disc_centers(1,:))-3*treatment.landingDiscs(1).radius ...
+%                    max(disc_centers(1,:))+3*treatment.landingDiscs(1).radius ... 
+%                    min(disc_centers(2,:))-0.01 ...
+%                    max(disc_centers(2,:))+0.01 ... 
+%                    0.0 ...
+%                    0.48]; 
+    boundingBox = [0.1 0.9 0 0.48 0.02 0.48];   % only look at the parts of the track that are above 2cm from the ground   
+    
+                   
+    for ct_file=1:length(treatment.trackingFiles) % for each tracking file
+        trackingFile = treatment.trackingFiles(ct_file);
+        
+        % load h5_flying_kalman_estimates
+        data3d = readmatrix(fullfile(rootDir, trackingDir, trackingFile.name, file3d), 'Range', 2); % loading from second row onwards
+        % data3d = [obj_id frame timestamp x y z xvel yvel zvel ....]
+        unique_obj_ids = unique(data3d(:,1));
+        nObjects = length(unique_obj_ids);
+        
+        obj_ids = data3d(:,1);
+        
+         % Initializing the landing tracks
+        landingTracks = BlindLandingtrack.empty(nObjects, 0);
+        abortedLandingTracks = BlindLandingtrack.empty(nObjects, 0);
+        
+        % % % Find landing tracks
+        % do parallel search for all object ids in this data3d
+        pattern = treatment.pattern;
+        light = treatment.light;
+        foldername = trackingFile.name;
+        datenum = treatment.datenum;
+        parfor ct_id=1:nObjects
+%         for ct_id=1:nObjects
+            obj_id = unique_obj_ids(ct_id);
+            fulltrack = sortrows(data3d(obj_ids==obj_id, :), 3); % sorting rows with time
+            fulltrack = fulltrack(IsInsideBox(fulltrack(:,4:6), boundingBox), :); % selecting part of the track that is inside the boundingBox, gets rid of NaNs as well
+            
+            if isempty(fulltrack)
+                continue;
+            end
+            
+            landingTracks(ct_id) = BlindLandingtrack(pattern, light, foldername, datenum, obj_id);
+            landingTracks_per_object = landingTracks(ct_id);
+            
+            abortedLandingTracks(ct_id) = BlindLandingtrack(pattern, light, foldername, datenum, obj_id);
+            abortedLandingTracks_per_object = abortedLandingTracks(ct_id);
+            
+%             indices = find(abs(diff(fulltrack(:,2)))>frame_margin); % Finding where more than frame_margin frames are missing.
+            indices = [find(abs(diff(fulltrack(:,5)))>y_margin); find(abs(diff(fulltrack(:,2)))>frame_margin)]; % Finding where there is more than more than y_margin jump in consectutive entries.
+            indices1 = [0; sort(unique(indices))];
+            indices2 = [indices1(2:end); size(fulltrack,1)];
+            
+            yTravelled = arrayfun(@(i,j) abs(max(fulltrack(i:j,5))-min(fulltrack(i:j,5))), indices1+1, indices2);
+            nPoints = indices2-indices1;
+            intervals = [indices1+1 indices2];
+%             intervals = intervals(nPoints>20 & yTravelled>0.05,:); % picking all intervals that have at least 20 points and travel distance (in y) of more than 5 cm in between them
+            intervals = intervals(yTravelled>3*y_margin,:); % picking all intervals that have at least 20 points and travel distance (in y) of more than 5 cm in between them
+
+            % Now computation is done with each of these intervals as a
+            % "track"
+            for ct_interval = 1:size(intervals,1)
+                track = fulltrack(intervals(ct_interval,1):intervals(ct_interval,2),:);
+            
+                % % Extract track excerpt that corresponds to landing tracks
+                % find indices of all points that intersect 0.24 m
+                % This only selects landing tracks that go through y=0.24 m
+                % plane and precludes the ones that have shorter length of
+                % approach
+                
+                % finding indices where bbee is crossing y=10m plane (either
+                % towards or away from the disc) while flying (z>=0.02m)
+                intersect_indices_nearHive = find((track(1:end-1,5) < y_hiveDisc-5*y_margin & ...
+                    track(2:end,5) >= y_hiveDisc-5*y_margin & ...
+                    abs(diff(track(:,2))) < frame_margin & ...
+                    track(1:end-1,6) >= 0.02) | ...
+                    (track(1:end-1,5) > y_hiveDisc-5*y_margin & ...
+                    track(2:end,5) <= y_hiveDisc-5*y_margin & ...
+                    abs(diff(track(:,2))) < frame_margin & ...
+                    track(1:end-1,6) >= 0.02));
+                
+                intersect_indices_nearFeeder = find((track(1:end-1,5) > y_feederDisc+5*y_margin & ...
+                    track(2:end,5) <= y_feederDisc+5*y_margin & ...
+                    abs(diff(track(:,2))) < frame_margin & ...
+                    track(1:end-1,6) >= 0.02) | ...
+                    (track(1:end-1,5) < y_feederDisc+5*y_margin & ...
+                    track(2:end,5) >= y_feederDisc+5*y_margin & ...
+                    abs(diff(track(:,2))) < frame_margin & ...
+                    track(1:end-1,6) >= 0.02));
+                
+                intersect_indices = sort(unique([intersect_indices_nearHive; intersect_indices_nearFeeder]));
+                                    
+                                  
+                % Look into 1.5s ahead and behind for each index to see if they cross y_margin away from either platforms
+                for ct=1:length(intersect_indices)
+                    time_intersect = track(intersect_indices(ct),3);
+                    y_track_ahead = track(track(:,3) >= time_intersect & track(:,3) <= time_intersect+time_margin, 5);
+                    y_track_behind = track(track(:,3) >= time_intersect-time_margin & track(:,3) <= time_intersect, 5);
+                    %                 z_track_ahead = track(track(:,3) >= time_intersect & track(:,3) <= time_intersect+time_margin, 6);
+                    %                 z_track_behind = track(track(:,3) >= time_intersect-time_margin & track(:,3) <= time_intersect, 6);
+                    if any(y_track_ahead > y_hiveDisc-y_margin) % landing track towards hive
+                        % track excerpt moving towards hive
+                        
+                        % % Now choosing track excerpt
+                        
+                        % ymin can lie in the track behind or in the track
+                        % ahead
+                        % min_indx based on min y
+                        [~, min_indx] = min(y_track_behind);
+                        min_indx = intersect_indices(ct) - (length(y_track_behind) - min_indx);
+                                                
+                        % max_indx based on max y
+                        [~, max_indx1] = max(y_track_ahead);
+                        
+                        % max_indx based on first point that is within 1 cm
+                        % distance from the landing disc
+                        max_indx2 = find(y_track_ahead>y_hiveDisc-0.01,1);
+                        
+                        if ~isempty(max_indx2) && max_indx2 < max_indx1
+                            max_indx = intersect_indices(ct) + max_indx2 - 1;
+                        else
+                            max_indx = intersect_indices(ct) + max_indx1 - 1;
+                        end
+                        
+                        if min_indx == intersect_indices(ct) % ymin lies in the track ahead
+                            % Search only upto max_indx
+                            max_indx3 = find(y_track_ahead>y_hiveDisc-y_margin,1);
+                            [~, min_indx1] = min(y_track_ahead(1:max_indx3));
+                            min_indx1 = intersect_indices(ct) + min_indx1 -1;
+                            min_indx = max([min_indx min_indx1-10]); % keeping 10 points before ymin for derivative/filtering computations
+                        else
+                            min_indx = max([1 min_indx-10]); % keeping 10 points before ymin for derivative/filtering computations
+                        end
+                        
+                        assert(max_indx > min_indx);
+                        
+                        rawState =  track(min_indx:max_indx,:);
+                        indx_offground = find(rawState(:,6)>0.015, 1);
+                        if ~isempty(indx_offground)
+                            rawState = rawState(indx_offground:end,:);
+                        end
+                        
+                        side = 'Hive';
+                        
+                        if size(rawState,1) > 10 && ...
+                                all(IsInsideCylinder(center_hiveDisc', center_hiveDisc'-[0 5*y_margin 0], radius_hiveDisc, rawState(end-9:end,4:6))) % && ... % mean(rawState(end-10:end,6)) >= 0.05 && mean(rawState(end-10:end,6)) <= 0.35 ...
+%                                 sum(rawState(:,6)>0.05)/size(rawState,1) > 0.3
+                            landingTracks_per_object.rawTrack(end+1) = rawState_BlindLandingtrack(rawState, side);
+                        end
+                        
+                    elseif any(y_track_ahead > y_hiveDisc-2.5*y_margin) % aborted landing track towards hive
+                        % catch track excerpts that go beyond y=5cm from disc but not
+                        % y=2 cm from disc. Note that the order of if, elseif
+                        % statement matters here!
+                        
+                        % track excerpt moving towards hive
+                        
+                        % % Now choosing track excerpt
+                        
+                        % ymin can lie in the track behind or in the track
+                        % ahead
+                        % min_indx based on min y
+                        [~, min_indx] = min(y_track_behind);
+                        min_indx = intersect_indices(ct) - (length(y_track_behind) - min_indx);
+                                                
+                        % max_indx based on max y
+                        [~, max_indx1] = max(y_track_ahead);
+                        
+                        % max_indx based on first point that is within 1 cm
+                        % distance from the landing disc
+                        max_indx2 = find(y_track_ahead>y_hiveDisc-0.01,1);
+                        
+                        if ~isempty(max_indx2) && max_indx2 < max_indx1 % Should not get executed
+                            max_indx = intersect_indices(ct) + max_indx2 - 1;
+                            error('Should not be here!'); % For verification
+                        else
+                            max_indx = intersect_indices(ct) + max_indx1 - 1;
+                        end
+                        
+                        if min_indx == intersect_indices(ct) % ymin lies in the track ahead
+                            % Search only upto max_indx
+                            max_indx3 = find(y_track_ahead>y_hiveDisc-2.5*y_margin,1);
+                            [~, min_indx1] = min(y_track_ahead(1:max_indx3));
+                            min_indx1 = intersect_indices(ct) + min_indx1 -1;
+                            min_indx = max([min_indx min_indx1-10]); % keeping 10 points before ymin for derivative/filtering computations
+                        else
+                            min_indx = max([1 min_indx-10]); % keeping 10 points before ymin for derivative/filtering computations
+                        end
+                        
+                        max_indx = min([max_indx+15 size(track,1)]); % keeping 15 points after ymax for visualization of aborted track
+                        
+                        assert(max_indx > min_indx);
+                        
+                        rawState =  track(min_indx:max_indx,:);
+                        indx_offground = find(rawState(:,6)>0.015, 1);
+                        if ~isempty(indx_offground)
+                            rawState = rawState(indx_offground:end,:);
+                        end
+                        
+                        side = 'Hive';
+                        
+                        if size(rawState,1) > 10 && ...
+                                all(IsInsideCylinder(center_hiveDisc', center_hiveDisc'-[0 7.5*y_margin 0], radius_hiveDisc, rawState(end-9:end,4:6))) % && ... % mean(rawState(end-10:end,6)) >= 0.05 && mean(rawState(end-10:end,6)) <= 0.35 ...
+%                                 sum(rawState(:,6)>0.05)/size(rawState,1) > 0.3
+                            abortedLandingTracks_per_object.rawTrack(end+1) = rawState_BlindLandingtrack(rawState, side);
+                        end   
+                        
+                    elseif any(y_track_ahead < y_feederDisc+y_margin) % landing track towards feeder
+                        % track excerpt moving towards feeder
+                        
+                        % min_indx based on max y (think about wind tunnel
+                        % attached coordinate system)
+                        [~, min_indx] = max(y_track_behind);
+                        min_indx = intersect_indices(ct) - (length(y_track_behind) - min_indx);
+                        
+                        % max_indx based on min y
+                        [~, max_indx1] = min(y_track_ahead);
+                        
+                        % max_indx based on first point that is within 1 cm
+                        % distance from the landing disc
+                        max_indx2 = find(y_track_ahead<y_feederDisc+0.01,1);
+                        
+                        if ~isempty(max_indx2) && max_indx2 < max_indx1
+                            max_indx = intersect_indices(ct) + max_indx2 - 1;
+                        else
+                            max_indx = intersect_indices(ct) + max_indx1 - 1;
+                        end
+                        
+                        if min_indx == intersect_indices(ct) % ymax lies in the track ahead
+                            % Search only upto max_indx
+                            max_indx3 = find(y_track_ahead < y_feederDisc+y_margin,1);
+                            [~, min_indx1] = max(y_track_ahead(1:max_indx3));
+                            min_indx1 = intersect_indices(ct) + min_indx1 -1;
+                            min_indx = max([min_indx min_indx1-10]); % keeping 10 points before ymax for derivative/filtering computations
+                        else
+                            min_indx = max([1 min_indx-10]); % keeping 10 points before ymin for derivative/filtering computations
+                        end
+                        
+                        assert(max_indx > min_indx);
+                        
+                        rawState =  track(min_indx:max_indx,:);
+                        indx_offground = find(rawState(:,6)>0.015, 1);
+                        if ~isempty(indx_offground)
+                            rawState = rawState(indx_offground:end,:);
+                        end
+                        
+                        side = 'Feeder';
+                        
+                        if size(rawState,1) > 10 && ...
+                                all(IsInsideCylinder(center_feederDisc', center_feederDisc'+[0 5*y_margin 0], radius_feederDisc, rawState(end-9:end,4:6))) %&& ... % mean(rawState(end-10:end,6)) >= 0.05 && mean(rawState(end-10:end,6)) <= 0.35 ...
+                            %                                 sum(rawState(:,6)>0.05)/size(rawState,1) > 0.3
+                            landingTracks_per_object.rawTrack(end+1) = rawState_BlindLandingtrack(rawState, side);
+                        end
+                        
+                    elseif any(y_track_ahead < y_feederDisc+2.5*y_margin) % aborted landing track towards feeder
+                        % catch track excerpts that go beyond y=5cm from disc but not
+                        % y=2 cm from disc. Note that the order of if, elseif
+                        % statement matters here!
+                        
+                        % track excerpt moving towards feeder
+                        
+                        % min_indx based on max y (think about wind tunnel
+                        % attached coordinate system)
+                        [~, min_indx] = max(y_track_behind);
+                        min_indx = intersect_indices(ct) - (length(y_track_behind) - min_indx);
+                        
+                        % max_indx based on min y
+                        [~, max_indx1] = min(y_track_ahead);
+                        
+                        % max_indx based on first point that is within 1 cm
+                        % distance from the landing disc
+                        max_indx2 = find(y_track_ahead<y_feederDisc+0.01,1);
+                        
+                        if ~isempty(max_indx2) && max_indx2 < max_indx1 % Should not execute
+                            max_indx = intersect_indices(ct) + max_indx2 - 1;
+                            error('Should not be here!');
+                        else
+                            max_indx = intersect_indices(ct) + max_indx1 - 1;
+                        end
+                        
+                        if min_indx == intersect_indices(ct) % ymax lies in the track ahead
+                            % Search only upto max_indx
+                            max_indx3 = find(y_track_ahead < y_feederDisc+2.5*y_margin,1);
+                            [~, min_indx1] = max(y_track_ahead(1:max_indx3));
+                            min_indx1 = intersect_indices(ct) + min_indx1 -1;
+                            min_indx = max([min_indx min_indx1-10]); % keeping 10 points before ymax for derivative/filtering computations
+                        else
+                            min_indx = max([1 min_indx-10]); % keeping 10 points before ymin for derivative/filtering computations
+                        end
+                        
+                        max_indx = min([max_indx+15 size(track,1)]); % keeping 15 points after ymax for visualization of aborted track
+                        
+                        assert(max_indx > min_indx);
+                        
+                        rawState =  track(min_indx:max_indx,:);
+                        indx_offground = find(rawState(:,6)>0.015, 1);
+                        if ~isempty(indx_offground)
+                            rawState = rawState(indx_offground:end,:);
+                        end
+                        
+                        side = 'Feeder';
+                        
+                        if size(rawState,1) > 10 && ...
+                                all(IsInsideCylinder(center_feederDisc', center_feederDisc'+[0 7.5*y_margin 0], radius_feederDisc, rawState(end-9:end,4:6))) %&& ... % mean(rawState(end-10:end,6)) >= 0.05 && mean(rawState(end-10:end,6)) <= 0.35 ...
+                            %                                 sum(rawState(:,6)>0.05)/size(rawState,1) > 0.3
+                            abortedLandingTracks_per_object.rawTrack(end+1) = rawState_BlindLandingtrack(rawState, side);
+                        end
+                        
+                    end
+                end
+            end
+            % Remove duplicate track excerpts
+            landingTracks_per_object.removeDuplicateTracks();
+            abortedLandingTracks_per_object.removeDuplicateTracks();
+            
+%             % Remove track parts that lie after a time gap of more than 10
+%             % time points (useful during filtering)
+%             landingTracks_per_object.discardTrackPartsAfterGaps();
+            
+%             if isempty(landingTracks_per_object.rawTrack)
+%                 landingTracks(ct_id) = BlindLandingtrack.empty(1,0);
+%             end
+            
+            
+%             for ct_landingDiscs = 1:length(landingDiscs)
+%                 y_disc = disc_centers(2, ct_landingDiscs);
+%                 if strcmpi(landingDiscs(ct_landingDiscs).side, 'Feeder')
+%                     intersect_indices_feeder = find((track(1:end-1,5) < y_disc - y_margin & ...
+%                         track(2:end,5) >= y_disc - y_margin) | (track(1:end-1,5) > y_disc - y_margin & ...
+%                         track(2:end,5) <= y_disc - y_margin));
+%                 else
+%                     intersect_indices_hive = find(track(1:end-1,5) < y_disc + y_margin & ...
+%                         track(2:end,5) >= y_disc + y_margin);
+%                 end
+%                 
+%             end
+            
+            
+            
+        end
+%         keyboard
+        % Select only non-empty ones
+        treatment.landingTracks = [treatment.landingTracks landingTracks(arrayfun(@(x) ~isempty(x.rawTrack), landingTracks))];
+        treatment.abortedLandingTracks = [treatment.abortedLandingTracks abortedLandingTracks(arrayfun(@(x) ~isempty(x.rawTrack), abortedLandingTracks))];
+        
+%         % filter the the tracks to compute state
+%         for ct_track=1:length(treatment.landingTracks)
+%             treatment.landingTracks(ct_track).filterRawTracks(20);
+%         end
+%         treatment.landingTracks = treatment.landingTracks(arrayfun(@(x) ~isempty(x.rawTrack), treatment.landingTracks));
+%         
+    end
+%     keyboard
+    if rem(ct_treatment,8) == 0
+        % save data file at the end of each day
+        save(fullfile(rootDir, trackingDir, 'BlindLanding_and_aborted_tracks_A3.mat'), 'treatments');
+%         keyboard
+    end
+    
+    
+end
+save(fullfile(rootDir, trackingDir, 'BlindLanding_and_aborted_tracks_A3.mat'), 'treatments');
+keyboard;
 
 %% Display information about the # of tracks
 clc; close all;
@@ -549,9 +963,11 @@ for ct_wind = 1:length(winds)
                 relevantTreatments = relevantTreatments(hasUniformHwData);
                 
                 landingTracks = [relevantTreatments.landingTracks];
+                abortedLandingTracks = [relevantTreatments.abortedLandingTracks];
                                  
                 % # of landing tracks
                 disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
+                disp(['# of distinct Flydra objects (abortedLandingTracks): ' num2str(length(abortedLandingTracks))]);
             elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
                 relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
             else
@@ -590,8 +1006,16 @@ for ct_treatment=1:length(treatments)
         landingTrack.compute_states_in_LDF(landingDiscs);
         landingTrack.compute_rawData_in_LDF(landingDiscs);
     end
+    
+    for ct_track=1:length(treatment.abortedLandingTracks)
+        abortedlandingTrack = treatment.abortedLandingTracks(ct_track);
+        
+        % Computing states in landing disc reference frame
+        abortedlandingTrack.compute_states_in_LDF(landingDiscs);
+        abortedlandingTrack.compute_rawData_in_LDF(landingDiscs);
+    end
 end
-outputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
+outputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLanding_and_aborted_tracks_A3_LDF.mat';
 save(outputFile, 'treatments', '-v7.3', '-nocompression');
 
 %% CODE AFTER THIS IS NOT CHECKED - IT MIGHT NOT WORK WITH THE NEW VERSION OF TRACK DEFINITIONS.

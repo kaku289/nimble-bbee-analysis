@@ -17,6 +17,7 @@ classdef Steadywindtreatment < handle
         landingDiscs = LandingDisc.empty; 
         
         landingTracks = BlindLandingtrack.empty; % to store blind landing tracks
+        abortedLandingTracks = BlindLandingtrack.empty; % to store blind landing tracks that are aborted
         
         videosParsed = false; % If the videos has been scored and tracks have been "projected onto them"
         

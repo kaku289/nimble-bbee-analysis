@@ -37,6 +37,8 @@ behaviour = {'rising','constant','sleeping'};
 data_all = struct.empty;
 
 Nperday = zeros(length(winds),1); % no. of state LDFs per day in different winds
+Nperday_aborted = zeros(length(winds),1); % no. of aborted state LDFs per day in different winds
+NrelevantTreatments = zeros(length(winds),1);
 for ct_wind = 1:length(winds)
         for ct_behaviour = 2%1:length(behaviour)
             clear dummy;
@@ -66,6 +68,8 @@ for ct_wind = 1:length(winds)
             relevantTreatments = relevantTreatments(hasUniformHwData);
             
             landingTracks = [relevantTreatments.landingTracks];
+            abortedLandingTracks = [relevantTreatments.abortedLandingTracks];
+            
             startTimes = arrayfun(@(x) (x.startTime)*ones(length([x.landingTracks.state_LDF]), 1), ...
                 relevantTreatments, 'UniformOutput', false);
             startTimes = vertcat(startTimes{:});
@@ -90,15 +94,30 @@ for ct_wind = 1:length(winds)
             
             data_all = [data_all; dummy];
             
-            Nperday(ct_wind) = length([landingTracks.state_LDF])/length(relevantTreatments);
-  
+            Nperday(ct_wind) = length([landingTracks.state_LDF]);
+            Nperday_aborted(ct_wind) = length([abortedLandingTracks.state_LDF]);
+            NrelevantTreatments = length(relevantTreatments);
         end
 
 end
 % keyboard;
 figure;
-bar(winds, Nperday);
-ylabel('No. of landings per day', 'FontSize', 14);
+% subplot(2,1,1);
+bar(winds, Nperday./NrelevantTreatments);
+ylabel('Avg. no. of landings per day', 'FontSize', 14);
+xlabel('Wind conditions', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+ylim([0 500]);
+figure;
+% subplot(2,1,2);
+bar(winds, Nperday_aborted./NrelevantTreatments);
+ylabel('Avg. no. of aborted landings per day', 'FontSize', 14);
+xlabel('Wind conditions', 'FontSize', 14);
+set(gca, 'FontSize', 16);
+ylim([0 500]);
+figure;
+bar(winds, (Nperday_aborted)./(Nperday_aborted+Nperday)*100);
+ylabel('Avg. % of aborted landings per day', 'FontSize', 14);
 xlabel('Wind conditions', 'FontSize', 14);
 set(gca, 'FontSize', 16);
 
