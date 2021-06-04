@@ -17,6 +17,8 @@ classdef data4rrefEstimate < handle
         zTravelled_ti ;
         xmean_ti ;
         zmean_ti ;
+        ymid ; % middle point between two extreme points
+        yrange; % delta y between first and second point of intervals_ti
         fd_analytical_ti ; % analytically computed flight duration 
         fd_actual_ti ; % actual flight duration
         

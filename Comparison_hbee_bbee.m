@@ -151,6 +151,9 @@ load(inputFile);
 landing_tracks = [landingTracks{:}];
 static_patternnums = [1 2 3 4 5 6 10 11 18];
 landingTracks = landing_tracks(arrayfun(@(x) ismember(x,static_patternnums), [landing_tracks.patternnum]));
+% Computing approach velocity for hbee data
+hbee.V = arrayfun(@(x) x.state_LDF.filteredState(1,6),landingTracks);
+hbee.V3d = arrayfun(@(x) (sum(x.state_LDF.filteredState(1,5:7).^2))^0.5,landingTracks);
 
 factors = [0.25:0.25:2.5];
 chosen_fac = 1.5;
@@ -181,8 +184,7 @@ for ct=1:length(hbee_data)
     hbee_data(ct).rmean = vertcat(dummy{:});
 
     dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,hbee_data(ct).tracks_fac,'UniformOutput',false);
-    hbee_data(ct).ymean = vertcat(dummy{:});
-    
+    hbee_data(ct).ymean = vertcat(dummy{:});  
 end
 
 dummy = abs(vertcat(hbee_data.rref)-vertcat(hbee_data.rmean));
@@ -217,7 +219,7 @@ plot(bbee_histfit(2).XData, pdf(bbee_pd, bbee_histfit(2).XData),'color',line_cma
 
 legend('honeybees','bumblebees','fontsize',16)
 xlabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
-ylabel('Probability density function', 'FontSize', 16);
+ylabel('Probability density', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 
 
@@ -238,6 +240,150 @@ scatter(-bbee_data(ct).ymean,-bbee_data(ct).rref,10,points_cmap(2,:),'filled','s
 set(gca, 'FontSize', 16);
 ylabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
 xlabel('Mean y (m)', 'FontSize', 16);
+
+% Plotting vmean vs ymean
+figure; hold on;
+ymean = -hbee_data(ct).ymean;
+y_vec = 0.05:0.001:max(ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(1+b(2)));
+Coefficients = [0.78618 -0.21784]; % from R
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(1,:), 'LineWidth', 2);
+ymean = -bbee_data(ct).ymean;
+y_vec = min(ymean):0.001:max(ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(1+b(2)));
+Coefficients = [-0.81634 -0.74543]; % from R (bumblebee_landing_dynamics_free-flight.R in A4 R-statistics)
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:), 'LineWidth', 2);
+scatter(-hbee_data(ct).ymean,-hbee_data(ct).rref.*-hbee_data(ct).ymean,10,points_cmap(1,:),'filled','s');
+scatter(-bbee_data(ct).ymean,-bbee_data(ct).rref.*-bbee_data(ct).ymean,10,points_cmap(2,:),'filled','s');
+set(gca, 'FontSize', 16);
+ylabel('V* (ms-1)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+
+%% Plotting apporach velocity comparison for bbees and hbees
+% Extract all 10005 approaches for bbees
+close all; clc; 
+% clear;
+% if isunix
+%     inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+% % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_3dspeed.mat';
+% elseif ispc
+%     inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+% end
+% % load(inputFile);
+treatments = treatments(1:14*8);
+
+pattern = {'checkerboard', 'spokes'};
+light = {'low', 'medium', 'high'};
+behaviour = {'rising','constant','sleeping'};
+data_all = struct.empty;
+for ct_pattern = 1:length(pattern)
+    for ct_light = 1:length(light)
+        for ct_behaviour = 2%1:length(behaviour)
+            clear dummy;
+
+            disp(['Pattern: ' pattern{ct_pattern} ...
+                  ', light: ' light{ct_light} ...
+                  ', behaviour: ' behaviour{ct_behaviour}]);
+              
+            % Selecting relevant treatments
+            if strcmpi(behaviour{ct_behaviour}, 'rising')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)==1);
+            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)>1 & ...
+                                     rem(1:length(treatments), 8)<8);
+            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
+                                     strcmpi({treatments.light}, light{ct_light}) & ...
+                                     rem(1:length(treatments), 8)==0);
+            else
+                error('What other treatments did you perform dude?')
+            end
+            landingTracks = [relevantTreatments.landingTracks];
+            startTimes = arrayfun(@(x) (x.startTime)*ones(length([x.landingTracks.state_LDF]), 1), ...
+                relevantTreatments, 'UniformOutput', false);
+            startTimes = vertcat(startTimes{:});
+            
+            days = arrayfun(@(x) (x.datenum)*ones(length([x.landingTracks.state_LDF]), 1), ...
+                relevantTreatments, 'UniformOutput', false);
+            days = vertcat(days{:});
+            
+            % # of landing tracks
+            disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
+            
+            % # of distinct state LDFs
+            disp(['# of distinct state LDFs: ' num2str(length([landingTracks.state_LDF]))]);
+            
+            hastakeoff_pertreatment = cell(0,1);
+            for ct_treatment = 1:length(relevantTreatments)
+                treatment = relevantTreatments(ct_treatment);
+                hastakeoff_pertreatment{ct_treatment} = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs),[treatment.landingTracks.state_LDF]);
+            end
+            hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
+            
+            dummy.state_LDF = [landingTracks.state_LDF];
+            dummy.pattern = (ct_pattern)*ones(1, length(dummy.state_LDF));
+            dummy.light = (ct_light)*ones(1, length(dummy.state_LDF));
+            dummy.day = days';
+            dummy.time = startTimes';
+            dummy.hastakeoff_pertreatment = hastakeoff_pertreatment;
+            
+            data_all = [data_all; dummy];
+  
+        end
+    end
+end
+
+% Compute averages of starting velocities for landings with take-off and free-flight
+y_start = cell(length(data_all),1);
+V_start = cell(length(data_all),1);
+V3d_start = cell(length(data_all),1);
+for ct=1:length(data_all)
+    for ct1=1:length(data_all(ct).state_LDF)
+        
+        [y_start{ct}(ct1,1), ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        V_start{ct}(ct1,1) = data_all(ct).state_LDF(ct1).filteredState(ymin_indx,6);
+        V3d_start{ct}(ct1,1) = (sum(data_all(ct).state_LDF(ct1).filteredState(ymin_indx,5:7).^2))^0.5;
+    end
+end
+
+bbee.V3d = vertcat(V3d_start{:});
+bbee.V = vertcat(V_start{:});
+
+bbee.V_freeFlight = bbee.V(~[data_all.hastakeoff_pertreatment]);
+% V3d_takeOff = V3d([data_all.hastakeoff_pertreatment]);
+bbee.V3d_freeFlight = bbee.V3d(~[data_all.hastakeoff_pertreatment]);
+% V3d_takeOff = V3d([data_all.hastakeoff_pertreatment]);
+% [mean(V3d_freeFlight) std(V3d_freeFlight)]
+% [mean(V3d_takeOff) std(V3d_takeOff)]
+
+% [sum([data_all.hastakeoff_pertreatment]) sum(~[[data_all.hastakeoff_pertreatment]])]
+% quantile(V3d_freeFlight,[0.25, 0.5, 0.75])
+% quantile(V3d_takeOff,[0.25, 0.5, 0.75])
+
+
+close all;
+figure;
+histogram(hbee.V3d,'facecolor',points_cmap(1,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+hold on;
+histogram(bbee.V3d_freeFlight,'facecolor',points_cmap(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+legend('honeybees','bumblebees','fontsize',16)
+xlabel('V3d_0 (ms-1)', 'FontSize', 16);
+ylabel('Probability density', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xlim([0 2.5]);
+
+figure;
+histogram(hbee.V,'facecolor',points_cmap(1,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+hold on;
+histogram(bbee.V_freeFlight,'facecolor',points_cmap(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+legend('honeybees','bumblebees','fontsize',16)
+xlabel('V_0 (ms-1)', 'FontSize', 16);
+ylabel('Probability density', 'FontSize', 16);
+set(gca, 'FontSize', 16);
 
 
 %% CODE below is not used

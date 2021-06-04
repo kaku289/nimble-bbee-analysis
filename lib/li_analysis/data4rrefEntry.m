@@ -16,6 +16,7 @@ classdef data4rrefEntry < handle
         xmean;
         zmean;
         
+        
         fd_analytical_ti; % analytically computed flight duration
         fd_actual_ti; % actual flight duration
         

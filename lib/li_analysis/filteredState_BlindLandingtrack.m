@@ -238,7 +238,9 @@ classdef filteredState_BlindLandingtrack < handle
                     obj.rrefSegments(ct_factor).zTravelled_ti = arrayfun(@(i,j) abs(max(z_all(i:j)) - min(z_all(i:j))), intervals_ti(:,1), intervals_ti(:,2)) ;
                     obj.rrefSegments(ct_factor).xmean_ti = arrayfun(@(i,j) mean(x_all(i:j)), intervals_ti(:,1), intervals_ti(:,2)) ;
                     obj.rrefSegments(ct_factor).zmean_ti = arrayfun(@(i,j) mean(z_all(i:j)), intervals_ti(:,1), intervals_ti(:,2)) ;
-                    obj.rrefSegments(ct_factor).fd_analytical_ti = arrayfun(@(i,j) log(abs(y_all(j)/y_all(i))), intervals_ti(:,1), intervals_ti(:,2))./obj.rrefSegments(ct_factor).rref_ti; % analytically computed flight duration 
+                    obj.rrefSegments(ct_factor).yrange = arrayfun(@(i,j) abs(y_all(i) - y_all(j)), intervals_ti(:,1), intervals_ti(:,2)) ;
+                    obj.rrefSegments(ct_factor).ymid = arrayfun(@(i,j) y_all(i) + abs(y_all(i) - y_all(j))/2, intervals_ti(:,1), intervals_ti(:,2)) ;
+                    obj.rrefSegments(ct_factor).fd_analytical_ti = arrayfun(@(i,j) log(abs(y_all(j)/y_all(i))), intervals_ti(:,1), intervals_ti(:,2))./obj.rrefSegments(ct_factor).rref_ti; % analytically computed flight duration
                     obj.rrefSegments(ct_factor).fd_actual_ti = arrayfun(@(i,j) diff(t_all([i j])), intervals_ti(:,1), intervals_ti(:,2)); % actual flight duration
                     
                     % Time-window dependent best intervals for a particular

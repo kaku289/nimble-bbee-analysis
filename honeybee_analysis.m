@@ -596,9 +596,9 @@ for ct=1:length(data)
         jump_ratios{ct1} = y_r(2:end,2)./y_r(1:end-1,2);
         
         % Plot straight line
-% % %         plot(-[ymean{ct1}], -[rmean{ct1}] ...
-% % %         ,'Color', [225 225 225]./255/2,'LineWidth',1);
-        if rem(ct1,10) == 1
+%         plot(-[ymean{ct1}], -[rmean{ct1}] ...
+%         ,'Color', [225 225 225]./255/2,'LineWidth',1);
+        if rem(ct1,2) == 1
             plot(-[ymean{ct1}], -[rmean{ct1}] ...
             ,'Color', [225 225 225]./255/2,'LineWidth',1);
         end
@@ -702,7 +702,7 @@ set(gca, 'FontSize', 16);
 
 dummy = cellfun(@(x) [mean(x) std(x)],delta_rrref_posjumps,'UniformOutput',false);
 dummy = vertcat(dummy{:})
-for ct=1:6
+for ct=1:1
     disp([num2str(dummy(ct,1),'%0.3f') ' [' num2str(dummy(ct,2),'%0.3f') ']']);
 end
 dummy =cellfun(@(x) [mean(x) std(x)],delta_rrref_negjumps,'UniformOutput',false);
@@ -712,6 +712,17 @@ vertcat(dummy{:})
 dummy =cellfun(@(x) [mean(x) std(x)],ratio_rrref_negjumps,'UniformOutput',false);
 vertcat(dummy{:})
 
+figure(plotHandle);
+has_one_rref = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)==1,data(ct).tracks_fac);
+
+N = sum(has_one_rref);
+data_ss = data(ct).tracks_fac(has_one_rref);
+
+rmean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data_ss,'UniformOutput',false);
+ymean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data_ss,'UniformOutput',false);
+    
+scatter(-[ymean{:}], -[rmean{:}],10,...
+                [207 52 118]./255,'filled','o');
 
 %% Panel d for Figure 4 (ymean vs rref)
 % plotted for all tracks
@@ -765,9 +776,9 @@ plot(y_vec,modelfun(Coefficients,y_vec),'Color', [0 0 0], 'LineWidth', 2);
 % Panel a
 close all;
 
-taudots = -0.31032;
+taudots = -0.21784;
 
-intercepts = 0.66879; 
+intercepts = 0.78618; 
           
 points_cmap = [252,187,161;
 200,200,200]./255;
@@ -778,7 +789,7 @@ line_cmap = [215,48,31;
 
 dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data.tracks_fac,'UniformOutput',false);
 rmean= [vertcat(dummy{:})];
-6
+
 dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data.tracks_fac,'UniformOutput',false);
 ymean = [vertcat(dummy{:})];
 
@@ -812,6 +823,138 @@ xlabel('log(y*) (m)', 'FontSize', 16);
 
 scatter(log(-data2plot(:,1)),log(-data2plot(:,2)),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
 
+
+
+%% Plot ymean vs rmean with yrange covered with rref highlighted
+close all;
+
+taudots = -0.21784;
+intercepts = 0.78618;
+          
+points_cmap = [252,187,161;
+200,200,200]./255;
+
+line_cmap = [215,48,31;
+37,37,37]./255;
+
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data.tracks_fac,'UniformOutput',false);
+rmean= [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymid,data.tracks_fac,'UniformOutput',false);
+ymid = [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data.tracks_fac,'UniformOutput',false);
+ymean = [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).yrange,data.tracks_fac,'UniformOutput',false);
+yrange = [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x*ones(length(data.tracks_fac(x).rrefSegments(abs([data.tracks_fac(x).rrefSegments.factor]-chosen_fac)<1e-6).yrange),1),1:length(data.tracks_fac),'UniformOutput',false);
+indices = [vertcat(dummy{:})];
+tracks_fac = data.tracks_fac(indices)
+
+% data2plot = [ymean rmean 2*ones(size(rmean))];
+data2plot = [ymid rmean 2*ones(size(rmean))];
+% data2plot = data2plot(randperm(size(data2plot, 1)), :);
+figure; hold on;
+% plot lines
+% y_vec = min(-ymean):0.001:max(-ymean);
+% modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+% 
+% Coefficients = [mean(intercepts) mean(taudots)];
+% plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:),'LineWidth',3);
+
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+
+plot_every = 2;
+% scatter(-data2plot(:,1),-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+errorbar(-data2plot(1:plot_every:end,1),-data2plot(1:plot_every:end,2),yrange(1:plot_every:end)/2,'horizontal','LineStyle','none','Marker','o','MarkerSize',4 ...
+    ,'MarkerFaceColor',points_cmap(2,:));
+% hold on;
+% scatter(-ymean,-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+
+% ylim([0 10])
+
+
+% sum((-ymean-yrange/2)<0)
+% tracks_fac_ss = tracks_fac((-ymean-yrange/2)<0)
+% for ct=1:3
+%     tracks_fac_ss(ct).plot_rrefs(chosen_fac);
+% end
+
+%% Plot ymean vs rmean with groups from average analysis
+close all;
+
+groups = {[6],[4,5]};
+cmap = lines(length(groups));
+
+          
+points_cmap = [252,187,161;
+200,200,200]./255;
+
+line_cmap = [215,48,31;
+37,37,37]./255;
+
+
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data.tracks_fac,'UniformOutput',false);
+rmean= [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymid,data.tracks_fac,'UniformOutput',false);
+ymid = [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data.tracks_fac,'UniformOutput',false);
+ymean = [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).yrange,data.tracks_fac,'UniformOutput',false);
+yrange = [vertcat(dummy{:})];
+
+dummy = arrayfun(@(x) x*ones(length(data.tracks_fac(x).rrefSegments(abs([data.tracks_fac(x).rrefSegments.factor]-chosen_fac)<1e-6).yrange),1),1:length(data.tracks_fac),'UniformOutput',false);
+indices = [vertcat(dummy{:})];
+tracks_fac = data.tracks_fac(indices)
+
+dummy = arrayfun(@(x) data.landingTrack(x).patternnum*ones(length(data.tracks_fac(x).rrefSegments(abs([data.tracks_fac(x).rrefSegments.factor]-chosen_fac)<1e-6).yrange),1),1:length(data.tracks_fac),'UniformOutput',false);
+patternnums = [vertcat(dummy{:})];
+
+plotHandle = figure; hold on;
+legend_str = {};
+for ct=1:length(groups)
+    for ct1=1:length(groups{ct})
+        scatter(-ymean(patternnums==groups{ct}(ct1)),-rmean(patternnums==groups{ct}(ct1)),10,cmap(ct,:),'filled','o');
+    end
+    legend_str{end+1} = num2str(groups{ct});
+end
+
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+legend(legend_str);
+
+
+% data2plot = [ymean rmean 2*ones(size(rmean))];
+data2plot = [ymid rmean 2*ones(size(rmean))];
+% data2plot = data2plot(randperm(size(data2plot, 1)), :);
+figure; hold on;
+% plot lines
+% y_vec = min(-ymean):0.001:max(-ymean);
+% modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+% 
+% Coefficients = [mean(intercepts) mean(taudots)];
+% plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:),'LineWidth',3);
+
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+
+plot_every = 2;
+% scatter(-data2plot(:,1),-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
+errorbar(-data2plot(1:plot_every:end,1),-data2plot(1:plot_every:end,2),yrange(1:plot_every:end)/2,'horizontal','LineStyle','none','Marker','o','MarkerSize',4 ...
+    ,'MarkerFaceColor',points_cmap(2,:));
+% hold on;
+% scatter(-ymean,-data2plot(:,2),10,points_cmap(round(data2plot(:,3)),:),'filled','o');
 
 %% Comparison of bbees and hbees
 close all;
