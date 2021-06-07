@@ -4,8 +4,7 @@
 % Extract all approaches
 close all; clc;
 % clear;
-inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
-% load(inputFile);
+
 
 
 % to open/modify the Matlab text editor sessions
@@ -31,6 +30,9 @@ addpath('./lib/flymovieformat');
 addpath('./lib/hline_vline');
 
 %%
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLanding_and_aborted_tracks_A3_LDF.mat';
+% load(inputFile);
 
 winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
