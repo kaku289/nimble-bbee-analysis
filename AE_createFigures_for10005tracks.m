@@ -198,6 +198,88 @@ xlim([0 0.55]);
 xticks([0:0.1:0.5]);
 legend(patternKey(arrayfun(@(x) find(x==patternnums),patterns)));
 
+%% %%%%%%%%%%% Plot average approach for different "clusters"
+close all;
+ybins = -0.5:0.005:-0.01;
+
+clusters = {[6, 18], [3,7,8,9,10,11],[4,5]};
+
+cmap = lines(length(clusters));
+% cmap([2 5],:) = [];
+% colors = [cmap; 1 0 1; 1 0 0];
+colors = cmap;
+
+fig1 = figure; hold on;
+pattern_order_in_data_all = arrayfun(@(x) x.patternnum(1), data_all);
+for ct_cluster=1:length(clusters)
+%     tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).patternnum == ct_pattern),patterns, 'UniformOutput', false);
+    
+    tracks = [data_all(ismember(pattern_order_in_data_all, clusters{ct_cluster})).filteredStates_all]; %[tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
+    data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+    data_xyzuvw = vertcat(data_xyzuvw{:});
+    xyzuvw = [];
+    y = [];
+    sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+    r = [];
+    sem_r = [];
+    for ct=1:length(ybins)-1
+        dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+        y = [y; mean(ybins(ct:ct+1))];
+        xyzuvw = [xyzuvw; mean(dummy)];
+        r = [r; mean(dummy(:,5)./dummy(:,2))];
+        sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+        %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+        sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+        %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+    end
+    
+    
+    
+    
+    subplot(2,1,1); hold on;
+    % plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
+    % plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
+    fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_cluster,:), 'EdgeColor', colors(ct_cluster,:));
+%     plot(-y,xyzuvw(:,5),'Color',[252,187,161]./255,'Linewidth',1);
+    
+%     y_in_yrange = -y(-y>=yrange(1) & -y<=yrange(2));
+%     plot(y_in_yrange, xyzuvw(-y>=yrange(1) & -y<=yrange(2), 5),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+%     plot(y_in_yrange, rref_R*y_in_yrange,'LineWidth',2,'Color',[69 117 180]./255);
+%     plot([0 y_in_yrange(end)],[0 rref_R*y_in_yrange(end)],'--','LineWidth',2,'Color',[69 117 180]./255);
+%     title(['r* : ' num2str(rref_R,3)], 'FontSize', 16);
+    
+    subplot(2,1,2); hold on;
+    a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_cluster,:), 'EdgeColor', colors(ct_cluster,:));
+%     plot(-y,-r,'Color',[252,187,161]./255,'Linewidth',1);
+    
+    % ylim([0 0.3]);
+    % yticks([0:0.1:0.3]);
+%     xlim([0 0.32]);
+%     plot(y_in_yrange, -r(-y>=yrange(1) & -y<=yrange(2)),'.','MarkerSize',10,'MarkerFaceColor',[215 48 39]./255, 'MarkerEdgeColor',[215 48 39]./255);
+%     plot(y_in_yrange, rref_R*ones(length(y_in_yrange),1),'LineWidth',2,'Color',[69 117 180]./255);
+%     plot([0 y_in_yrange(end)],[rref_R rref_R],'--','LineWidth',2,'Color',[69 117 180]./255);
+
+
+end
+
+figure(fig1);
+subplot(2,1,1);
+ylabel('V (ms-1)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+ylim([0 1.5]);
+yticks([0:0.5:1.5]);
+xlim([0 0.55]);
+xticks([0:0.1:0.5]);
+subplot(2,1,2);
+ylabel('r (s-1)', 'FontSize', 16);
+xlabel('y (m)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(0.15); xline(0.35);
+ylim([0 6]);
+yticks([0:2:6]);
+xlim([0 0.55]);
+xticks([0:0.1:0.5]);
+legend(cellfun(@(x) num2str(x), clusters, 'UniformOutput', false));
 
 %%  Write file for analysis of average tracks in R 
 writeFile = true;

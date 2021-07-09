@@ -128,7 +128,7 @@ for ct_pattern = 1:length(pattern)
     end
 end
 
-bbee_data = data;
+bbee_data = data([data.ct_light]==3);
 for ct=1:length(bbee_data)
     hastakeoff = bbee_data(ct).hastakeoff;
     
@@ -149,7 +149,7 @@ inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLa
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
-static_patternnums = [1 2 3 4 5 6 10 11 18];
+static_patternnums = [3 4 5 6 7 8 9 10 11 18];
 landingTracks = landing_tracks(arrayfun(@(x) ismember(x,static_patternnums), [landing_tracks.patternnum]));
 % Computing approach velocity for hbee data
 hbee.V = arrayfun(@(x) x.state_LDF.filteredState(1,6),landingTracks);
@@ -203,7 +203,7 @@ map = brewermap(3,'Set1');
 
 % Plotting set-point histogram
 figure; hold on;
-hbee_histfit = histfit(-vertcat(hbee_data.rmean),13,'gamma');
+hbee_histfit = histfit(-vertcat(hbee_data.rmean),10,'gamma');
 hbee_pd = fitdist(-vertcat(hbee_data.rmean),'Gamma');
 % plot(hbee_histfit(2).XData, pdf(hbee_pd, hbee_histfit(2).XData)*sum(hbee_histfit(1).YData*(diff(hbee_histfit(1).XData(1:2)))),'g','Linewidth',0.5);
 figure;
@@ -211,9 +211,9 @@ bbee_histfit = histfit(-vertcat(bbee_data.rmean),[],'gamma');
 bbee_pd = fitdist(-vertcat(bbee_data.rmean),'Gamma');
 
 figure;
-hbee_hist = histogram(-vertcat(hbee_data.rmean),13,'facecolor',points_cmap(1,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+hbee_hist = histogram(-vertcat(hbee_data.rmean),10,'facecolor',points_cmap(1,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
 hold on;
-bbe_hist = histogram(-vertcat(bbee_data.rmean),67,'facecolor',points_cmap(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+bbe_hist = histogram(-vertcat(bbee_data.rmean),46,'facecolor',points_cmap(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
 plot(hbee_histfit(2).XData, pdf(hbee_pd, hbee_histfit(2).XData),'color',line_cmap(1,:),'Linewidth',2);
 plot(bbee_histfit(2).XData, pdf(bbee_pd, bbee_histfit(2).XData),'color',line_cmap(2,:),'Linewidth',2);
 
@@ -228,12 +228,12 @@ figure; hold on;
 ymean = -hbee_data(ct).ymean;
 y_vec = 0.05:0.001:max(ymean);
 modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
-Coefficients = [0.78618 -0.21784]; % from R
+Coefficients = [0.71536 -0.25140]; % from R
 plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(1,:), 'LineWidth', 2);
 ymean = -bbee_data(ct).ymean;
 y_vec = min(ymean):0.001:max(ymean);
 modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
-Coefficients = [-0.81634 -0.74543]; % from R (bumblebee_landing_dynamics_free-flight.R in A4 R-statistics)
+Coefficients = [-0.71612 -0.73242]; % from R (bumblebee_landing_dynamics_free-flight.R in A4 R-statistics)
 plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:), 'LineWidth', 2);
 scatter(-hbee_data(ct).ymean,-hbee_data(ct).rref,10,points_cmap(1,:),'filled','s');
 scatter(-bbee_data(ct).ymean,-bbee_data(ct).rref,10,points_cmap(2,:),'filled','s');
@@ -243,24 +243,26 @@ xlabel('Mean y (m)', 'FontSize', 16);
 
 % Plotting vmean vs ymean
 figure; hold on;
-ymean = -hbee_data(ct).ymean;
-y_vec = 0.05:0.001:max(ymean);
-modelfun = @(b,x)(exp(b(1))*x.^(1+b(2)));
-Coefficients = [0.78618 -0.21784]; % from R
-plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(1,:), 'LineWidth', 2);
 ymean = -bbee_data(ct).ymean;
 y_vec = min(ymean):0.001:max(ymean);
 modelfun = @(b,x)(exp(b(1))*x.^(1+b(2)));
-Coefficients = [-0.81634 -0.74543]; % from R (bumblebee_landing_dynamics_free-flight.R in A4 R-statistics)
-plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:), 'LineWidth', 2);
-scatter(-hbee_data(ct).ymean,-hbee_data(ct).rref.*-hbee_data(ct).ymean,10,points_cmap(1,:),'filled','s');
+Coefficients = [-0.71612 -0.73242]; % from R (bumblebee_landing_dynamics_free-flight.R in A4 R-statistics)
 scatter(-bbee_data(ct).ymean,-bbee_data(ct).rref.*-bbee_data(ct).ymean,10,points_cmap(2,:),'filled','s');
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(2,:), 'LineWidth', 2);
+
+ymean = -hbee_data(ct).ymean;
+y_vec = 0.05:0.001:max(ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(1+b(2)));
+Coefficients = [0.71536 -0.25140]; % from R
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', line_cmap(1,:), 'LineWidth', 2);
+scatter(-hbee_data(ct).ymean,-hbee_data(ct).rref.*-hbee_data(ct).ymean,10,points_cmap(1,:),'filled','s');
 set(gca, 'FontSize', 16);
 ylabel('V* (ms-1)', 'FontSize', 16);
 xlabel('y* (m)', 'FontSize', 16);
 
 %% Plotting apporach velocity comparison for bbees and hbees
-% Extract all 10005 approaches for bbees
+% Extract all 10005 approaches for bbees (Only high light condition is
+% plotted for bbee data, ct_light = 3)
 close all; clc; 
 % clear;
 % if isunix
@@ -277,7 +279,7 @@ light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 data_all = struct.empty;
 for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
+    for ct_light = 3%1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
             clear dummy;
 

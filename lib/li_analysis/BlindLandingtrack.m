@@ -1499,7 +1499,8 @@ classdef BlindLandingtrack < handle
                 
                 if strcmpi(filename(12:13),'bs')
                     pattern = 'Big static spiral';
-                    patternnum = 1;
+%                     patternnum = 1;
+                    patternnum = 8; % same as static 4-arm spiral
                 elseif strcmpi(filename(12:13),'ss')
                     pattern = 'Small static spiral';
                     patternnum = 2;

@@ -71,15 +71,23 @@ for ct_treatment = 1:length(dataFiles)
         end
         
         % Discard last point as it can be erroneous
-            dataFiles{ct_treatment}(ct).data.x = dataFiles{ct_treatment}(ct).data.x(1:end-1);
-            dataFiles{ct_treatment}(ct).data.y = dataFiles{ct_treatment}(ct).data.y(1:end-1);
-            dataFiles{ct_treatment}(ct).data.z = dataFiles{ct_treatment}(ct).data.z(1:end-1);
+        dataFiles{ct_treatment}(ct).data.x = dataFiles{ct_treatment}(ct).data.x(1:end-1);
+        dataFiles{ct_treatment}(ct).data.y = dataFiles{ct_treatment}(ct).data.y(1:end-1);
+        dataFiles{ct_treatment}(ct).data.z = dataFiles{ct_treatment}(ct).data.z(1:end-1);
             
         % Make correction for y-offset (by setting 0,0,0 as the origin
         % of the reference frame (for trajectories with yend>0.005m)
         if -dataFiles{ct_treatment}(ct).data.y(end) > 0.005*1000
             dataFiles{ct_treatment}(ct).data.x = -dataFiles{ct_treatment}(ct).data.x(end,1) + dataFiles{ct_treatment}(ct).data.x;
             dataFiles{ct_treatment}(ct).data.y = -dataFiles{ct_treatment}(ct).data.y(end,1) + dataFiles{ct_treatment}(ct).data.y;
+            dataFiles{ct_treatment}(ct).data.z = -dataFiles{ct_treatment}(ct).data.z(end,1) + dataFiles{ct_treatment}(ct).data.z;
+        end
+        
+        % Make correction for x and z-offset (by setting 0,0,0 as the origin
+        % of the reference frame (for trajectories with xend or zend < -0.05m)
+        if dataFiles{ct_treatment}(ct).data.x(end) < -0.05*1000 || dataFiles{ct_treatment}(ct).data.z(end) < -0.05*1000 
+            dataFiles{ct_treatment}(ct).data.x = -dataFiles{ct_treatment}(ct).data.x(end,1) + dataFiles{ct_treatment}(ct).data.x;
+%             dataFiles{ct_treatment}(ct).data.y = -dataFiles{ct_treatment}(ct).data.y(end,1) + dataFiles{ct_treatment}(ct).data.y;
             dataFiles{ct_treatment}(ct).data.z = -dataFiles{ct_treatment}(ct).data.z(end,1) + dataFiles{ct_treatment}(ct).data.z;
         end
         
@@ -209,10 +217,10 @@ save(outputFile, 'landingTracks');
 
 %% Extract rref data for statistical analysis
 clc; close all;
-% clear;
+clear;
 
 inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
-% load(inputFile);
+load(inputFile);
 
 landing_tracks = [landingTracks{:}];
 
@@ -237,6 +245,7 @@ data = data(indices);
 
 %% Write file for statistical analysis in R
 % This file contains data for all the factors
+
 clc;
 writeFile = true;
 r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_all_rref_Rstudio_hbeeParams.txt';
@@ -268,12 +277,13 @@ for ct_factor=1:length(factors)
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
     v = vertcat(data_fac.vmean_ti);
-    
+    delta_y = vertcat(data_fac.yrange);
+
 %     speed3d = vertcat(data_fac.speed3d_mean_ti);
 
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(flightID{:}) vertcat(setID{:}) vertcat(day{:}) ...
-        vertcat(patternnum{:}) y r v factor*ones(size(r,1),1)];
+        vertcat(patternnum{:}) y r v factor*ones(size(r,1),1) delta_y];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -286,7 +296,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','flightID','setID','day','patternnum','y','r','v','threshold'});
+        'VariableNames',{'approach','flightID','setID','day','patternnum','y','r','v','threshold','delta_y'});
     T.beeID = beeID;
     writetable(T,r_file);
 end
@@ -411,7 +421,7 @@ inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLa
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
-static_patternnums = [1 2 3 4 5 6 10 11 18];
+static_patternnums = [1 2 3 4 5 6 7 8 9 10 11 18];
 landingTracks = landing_tracks(arrayfun(@(x) ismember(x,static_patternnums), [landing_tracks.patternnum]));
 % landingTracks = landing_tracks([landing_tracks.patternnum] <= 11);
 
@@ -515,6 +525,9 @@ for ct=1:length(data)
     dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data(ct).tracks_fac,'UniformOutput',false);
     data(ct).ymean = vertcat(dummy{:});
     
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).yrange,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).deltay = vertcat(dummy{:});
+    
     dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).fd_analytical_ti,data(ct).tracks_fac,'UniformOutput',false);
     data(ct).fd_analytical_ti = vertcat(dummy{:});
     
@@ -534,16 +547,73 @@ dummy = abs(vertcat(data.rref)-vertcat(data.rmean));
 dummy = abs(vertcat(data.fd_analytical_ti)-vertcat(data.fd_actual_ti));
 [mean(dummy) median(dummy) max(dummy)]
 
-figure;
-% histogram(-vertcat(data.rmean), [0:0.5:8]);
-% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
-histfit(-vertcat(data.rmean),13,'gamma')
-xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
-ylabel('Occurences', 'FontSize', 16);
-set(gca, 'FontSize', 16);
 dummy = -vertcat(data.rmean);
 [mean(dummy) median(dummy) max(dummy) min(dummy)]
 pd = fitdist(dummy,'Gamma');
+
+% To find bin edges for statistial testing of delta_r and delta_y
+rvalues = [min(-vertcat(data.rmean)):0.01:max(-vertcat(data.rmean))];
+cum_pdf = cdf(pd,rvalues);
+
+bin_edgeindx1 = find(cum_pdf(1:end)>=0.333 & cum_pdf(1:end)<=0.34,1);
+bin_edgeindx2 = find(cum_pdf(1:end)>=0.666 & cum_pdf(1:end)<=0.67,1);
+r_edge1 = rvalues(bin_edgeindx1);
+r_edge2 = rvalues(bin_edgeindx2);
+
+figure;
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+histogram(vertcat(data.deltay))
+xlabel('delta y (m)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+figure; hold on;
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+hbee_histfit = histfit(-vertcat(data.rmean),10,'gamma')
+xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+
+figure; hold on;
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+hbee_hist = histogram(-vertcat(data.rmean),10,'Normalization','pdf');
+plot(hbee_histfit(2).XData, pdf(pd, hbee_histfit(2).XData),'color','r','Linewidth',2);
+xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+ylabel('Probability density (s)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+x1 = 0:0.01:r_edge1;
+% plot(h(2).XData, pdf(ptc(5), h(2).XData)*sum(h(1).YData*(diff(h(1).XData(1:2)))),'g','Linewidth',2);
+area(x1, pdf(pd,x1));
+
+x1 = r_edge1:0.01:r_edge2;
+area(x1, pdf(pd,x1));
+
+x1 = r_edge2:0.01:max(-vertcat(data.rmean));
+area(x1, pdf(pd,x1));
+
+
+figure;
+plot(rvalues, cum_pdf);
+xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+ylabel('Cumulative probability density', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m'); xline(r_edge2,'g');
+
+% rvalues = [min(-vertcat(data.rmean)):0.001:max(-vertcat(data.rmean))];
+% cum_pdf = cdf(pd,rvalues);
+% [~,bin_edgeindx1] = find(cum_pdf(1:end)>=0.2498 & cum_pdf(1:end)<=0.2502,1);
+% [~,bin_edgeindx2] = find(cum_pdf(1:end)>=0.4999 & cum_pdf(1:end)<=0.5005,1);
+% [~,bin_edgeindx3] = find(cum_pdf(1:end)>=0.75 & cum_pdf(1:end)<=0.7504,1);
+% r_edge1 = rvalues(bin_edgeindx1)
+% r_edge2 = rvalues(bin_edgeindx2)
+% r_edge3 = rvalues(bin_edgeindx3)
 
 %% Panel d for Figure 4 (ymean vs rref)
 % plotted only for tracks containing >1 r* segments
@@ -555,6 +625,12 @@ cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
 
 delta_rrref_posjumps = cell(length(data),1); % change in rref between two consecutive rref segments
 delta_rrref_negjumps = cell(length(data),1); % change in rref between two consecutive rref segments
+
+rref_posjumps = cell(length(data),1); 
+rref_negjumps = cell(length(data),1); 
+
+flightID_setID_patternnum_posjumps = cell(length(data),1); 
+flightID_setID_patternnum_negjumps = cell(length(data),1); 
 
 ratio_rrref_posjumps = cell(length(data),1); % change in rref between two consecutive rref segments
 ratio_rrref_negjumps = cell(length(data),1); % change in rref between two consecutive rref segments
@@ -578,6 +654,8 @@ for ct=1:length(data)
     
     jumps = cell(size(ymean));
     jump_ratios = cell(size(ymean));
+    jumps_rrefs = cell(size(ymean)); % r* from which jump occured
+    flightID_setID_patternnum = cell(size(ymean));
     disp(['# of tracks with >1 r* segments for chosen factor: ' num2str(N)]);
     plotHandle = figure; hold on;
     for ct1=1:N
@@ -594,10 +672,11 @@ for ct=1:length(data)
         % Finding whether the next r* is higher or lower
         jumps{ct1} = diff(y_r);
         jump_ratios{ct1} = y_r(2:end,2)./y_r(1:end-1,2);
-        
+        jumps_rrefs{ct1} = y_r(1:end-1,2);
+        flightID_setID_patternnum{ct1} = [landingTracks(ct1).flightID*ones(size(jumps{ct1},1),1) ...
+                                          landingTracks(ct1).setID*ones(size(jumps{ct1},1),1) ...
+                                          landingTracks(ct1).patternnum*ones(size(jumps{ct1},1),1)];
         % Plot straight line
-%         plot(-[ymean{ct1}], -[rmean{ct1}] ...
-%         ,'Color', [225 225 225]./255/2,'LineWidth',1);
         if rem(ct1,2) == 1
             plot(-[ymean{ct1}], -[rmean{ct1}] ...
             ,'Color', [225 225 225]./255/2,'LineWidth',1);
@@ -627,6 +706,15 @@ for ct=1:length(data)
     dummy = vertcat(jumps{:});
     delta_rrref_posjumps{ct} = dummy(dummy(:,2)>0,2);
     delta_rrref_negjumps{ct} = dummy(dummy(:,2)<0,2);
+    
+    dummy0 = vertcat(jumps_rrefs{:});
+    rref_posjumps{ct} = dummy0(dummy(:,2)>0);
+    rref_negjumps{ct} = dummy0(dummy(:,2)<0);
+    
+    dummy00 = vertcat(flightID_setID_patternnum{:});
+    flightID_setID_patternnum_posjumps{ct} = dummy00(dummy(:,2)>0,:);
+    flightID_setID_patternnum_negjumps{ct} = dummy00(dummy(:,2)<0,:);
+    
     
     dummy1 = vertcat(jump_ratios{:});
     assert(sum((dummy1>1) == (dummy(:,2)>0)) == length(dummy1))
@@ -693,6 +781,7 @@ delta_rref_per_treatment_mean = vertcat(delta_rref_per_treatment_mean{:})
 figure;
 histogram([vertcat(delta_rrref_posjumps{:}); vertcat(delta_rrref_negjumps{:})])
 % histfit([vertcat(delta_rrref_posjumps{:}); vertcat(delta_rrref_negjumps{:})], [], 'Gamma')
+xlim([-2 3]);
 xlabel('\Delta r*', 'FontSize', 16);
 ylabel('Occurences', 'FontSize', 16);
 set(gca, 'FontSize', 16);
@@ -724,8 +813,77 @@ ymean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-
 scatter(-[ymean{:}], -[rmean{:}],10,...
                 [207 52 118]./255,'filled','o');
 
+            
+% deltar vs r curve 
+figure;
+points_cmap = [252,187,161;
+200,200,200]./255;
+scatter(vertcat(rref_posjumps{:}),vertcat(delta_rrref_posjumps{:}),10,points_cmap(1,:),'filled','o');
+% arrayfun(@(x) xline(x), quantile(-rmean, [0 0.333 0.666 1]));
+arrayfun(@(x) xline(x), []);
+xlabel('set-points, r* (s-1)', 'FontSize', 16);
+ylabel('delta r* (s-1)', 'FontSize', 16);
+% scatter(log(-rmean),log(yrange),10,points_cmap(1,:),'filled','o');
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+figure;
+points_cmap = [252,187,161;
+200,200,200]./255;
+scatter(vertcat(rref_negjumps{:}),vertcat(delta_rrref_negjumps{:}),10,points_cmap(2,:),'filled','o');
+% arrayfun(@(x) xline(x), quantile(-rmean, [0 0.333 0.666 1]));
+arrayfun(@(x) xline(x), []);
+xlabel('set-points, r* (1/s)', 'FontSize', 16);
+ylabel('delta r* (s-1)', 'FontSize', 16);
+% scatter(log(-rmean),log(yrange),10,points_cmap(1,:),'filled','o');
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+figure;
+points_cmap = [252,187,161;
+200,200,200]./255;
+scatter(vertcat(rref_posjumps{:}, rref_negjumps{:}),vertcat(delta_rrref_posjumps{:}, delta_rrref_negjumps{:}),10,points_cmap(1,:),'filled','o');
+% arrayfun(@(x) xline(x), quantile(-rmean, [0 0.333 0.666 1]));
+arrayfun(@(x) xline(x), []);
+xlabel('set-points, r* (1/s)', 'FontSize', 16);
+ylabel('delta r* (s-1)', 'FontSize', 16);
+% scatter(log(-rmean),log(yrange),10,points_cmap(1,:),'filled','o');
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+figure; hold on;
+points_cmap = [252,187,161;
+200,200,200]./255;
+rref = vertcat(rref_posjumps{:}, rref_negjumps{:});
+deltarref = vertcat(delta_rrref_posjumps{:}, delta_rrref_negjumps{:});
+scatter(rref,deltarref,10,points_cmap(1,:),'filled','o');
+% arrayfun(@(x) xline(x), quantile(-rmean, [0 0.333 0.666 1]));
+arrayfun(@(x) xline(x), []);
+xlabel('set-points, r* (1/s)', 'FontSize', 16);
+ylabel('delta r* (s-1)', 'FontSize', 16);
+% scatter(log(-rmean),log(yrange),10,points_cmap(1,:),'filled','o');
+set(gca, 'FontSize', 16);
+rref_vec = min(rref):0.001:max(rref);
+modelfun = @(b,x)(b(1)+x.*b(2));
+Coefficients = [0.82746 -0.26617]; % from R
+plot(rref_vec,modelfun(Coefficients,rref_vec),'Color', [0 0 0], 'LineWidth', 2);
+%% Write file for statistical analysis of deltar vs r in R
+% This file contains data for chosen factor
+
+clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_deltar_vs_rref_Rstudio.txt';
+data_write = [delta_rrref_posjumps{:}, rref_posjumps{:}, flightID_setID_patternnum_posjumps{:};
+              delta_rrref_negjumps{:}, rref_negjumps{:}, flightID_setID_patternnum_negjumps{:}];
+          
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'deltar','r','flightID','setID','patternnum'});
+    writetable(T,r_file);
+end
 %% Panel d for Figure 4 (ymean vs rref)
-% plotted for all tracks
+% plotted for all tracks with points color coded with first, second or
+% third r*
 
 close all; clc;
 saveDir = '/home/reken001/Pulkit/graphs_temp';
@@ -768,9 +926,51 @@ ymean = arrayfun(@(x) vertcat(data_ymean{x}{:}), 1:length(data_ymean), 'UniformO
 ymean = vertcat(ymean{:});
 y_vec = 0.05:0.001:max(-ymean);
 modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
-Coefficients = [0.78618 -0.21784]; % from R
+Coefficients = [0.78587 -0.26508]; % from R
 plot(y_vec,modelfun(Coefficients,y_vec),'Color', [0 0 0], 'LineWidth', 2);
 
+%% Panel d for Figure 4 (ymean vs rref)
+% plotted for all tracks with points color coded with clusters of patterns
+close all; clc;
+saveDir = '/home/reken001/Pulkit/graphs_temp';
+
+clusters = {[6, 18], [3,7,8,9,10,11],[4,5]};
+
+cmap = lines(length(clusters));
+% cmap([2 5],:) = [];
+% colors = [cmap; 1 0 1; 1 0 0];
+colors = cmap;
+
+data_ymean = {}; data_rmean = {};
+for ct=1:length(clusters)
+    
+    data_ss = data.tracks_fac(ismember([data.landingTrack.patternnum], clusters{ct}));
+    
+    rmean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti,data_ss,'UniformOutput',false);
+
+    ymean = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data_ss,'UniformOutput',false);
+    
+    data_ymean{end+1} = vertcat(ymean{:});
+    data_rmean{end+1} = vertcat(rmean{:});
+end
+
+plotHandle1 = figure; hold on;
+% cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
+
+for ct=1:length(data_ymean)
+    scatter(-[data_ymean{ct}], -[data_rmean{ct}],10,...
+        cmap(ct,:),'filled','o');
+end
+set(gca, 'FontSize', 16);
+ylabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+xlabel('y* (m)', 'FontSize', 16);
+% Plot fit averaged over all light conditions
+ymean = arrayfun(@(x) vertcat(data_ymean{x}), 1:length(data_ymean), 'UniformOutput', false);
+ymean = vertcat(ymean{:});
+y_vec = 0.05:0.001:max(-ymean);
+modelfun = @(b,x)(exp(b(1))*x.^(b(2)));
+Coefficients = [0.78587 -0.26508]; % from R
+plot(y_vec,modelfun(Coefficients,y_vec),'Color', [0 0 0], 'LineWidth', 2);
 
 %% Plot ymean vs rmean
 % Panel a
@@ -885,6 +1085,28 @@ errorbar(-data2plot(1:plot_every:end,1),-data2plot(1:plot_every:end,2),yrange(1:
 %     tracks_fac_ss(ct).plot_rrefs(chosen_fac);
 % end
 
+% Figure (deltay vs r*)
+figure;
+histogram(yrange);
+% histfit(-vertcat(data.rmean),10,'gamma')
+xlabel('delta y, (m)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+
+figure;
+points_cmap = [252,187,161;
+200,200,200]./255;
+scatter(-rmean,yrange,10,points_cmap(1,:),'filled','o');
+% arrayfun(@(x) xline(x), quantile(-rmean, [0 0.333 0.666 1]));
+arrayfun(@(x) xline(x), []);
+xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
+ylabel('y range, delta y (m)', 'FontSize', 16);
+% scatter(log(-rmean),log(yrange),10,points_cmap(1,:),'filled','o');
+set(gca, 'FontSize', 16);
+% xlabel('Estimated set-points, log(r*) (1/s)', 'FontSize', 16);
+% ylabel('y range, log(delta y) (m)', 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
 %% Plot ymean vs rmean with groups from average analysis
 close all;
 
