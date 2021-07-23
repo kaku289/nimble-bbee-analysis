@@ -105,7 +105,7 @@ relevantTreatments = treatments;
 
 %% Copy previous data extracted using GUI (when there was y-offset in the trajectories) (not always needed, check if you need it!)
 % prevData = load('/media/reken001/Disk_12/honeybee_experiments/postprocessing/with_yoffset/BlindLandingtracks.mat');
-prevData = load('/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_manualrref.mat');
+prevData = load('/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_manualrref.mat');
 prevTreatments = prevData.treatments;
 
 assert(length(prevTreatments)==length(treatments));
@@ -136,7 +136,7 @@ end
 % Inputs
 close all;
 % 
-inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_manualrref.mat';
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_manualrref.mat';
 load(inputFile);
 
 % Plot code is not working yet. 
@@ -422,7 +422,7 @@ set(gca, 'FontSize', 18);
 ylabel('log(r*) (rad/s)', 'FontSize', 16);
 xlabel('log(y_{mean}) (m)', 'FontSize', 16);
 
-%% Find parameters for automatic r( extraction algorithm
+%% Find parameters for automatic r extraction algorithm
 
 close all;
 clc;

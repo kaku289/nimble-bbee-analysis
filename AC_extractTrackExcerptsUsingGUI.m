@@ -72,7 +72,8 @@ for ct_pattern = 2%1:length(pattern)
 end
 
 %% Display track numbers which have more than one rref
-tracks = [relevantTreatments.landingTracks];
+% tracks = [relevantTreatments.landingTracks];
+tracks = [treatments.landingTracks];
 for ct_track = 1:length(tracks)
     for ct_excerpt = 1:length(tracks(ct_track).DataGUI)
         if ~isempty(tracks(ct_track).DataGUI)  && sum(tracks(ct_track).DataGUI(ct_excerpt).y_mode1(:,1)~=0) > 1

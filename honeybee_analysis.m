@@ -10,8 +10,8 @@ addpath('./lib/diffxy');
 clc; close all;
 clear;
 
-dataDir = '/media/reken001/Disk_12/honeybee_experiments/landing_tracks';
-outputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+dataDir = '/media/reken001/Disk_11/honeybee_experiments/landing_tracks';
+outputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
 
 % dataFiles = dir(fullfile(dataDir,'*.mat'));
 % Look for dataFiles in dataDir and its subfolders
@@ -219,7 +219,7 @@ save(outputFile, 'landingTracks');
 clc; close all;
 clear;
 
-inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
@@ -248,7 +248,7 @@ data = data(indices);
 
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_all_rref_Rstudio_hbeeParams.txt';
+r_file = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/data_all_rref_Rstudio_hbeeParams.txt';
 factors = [0.25:0.25:2.5];
 data_write = [];
 beeID = {};
@@ -278,12 +278,13 @@ for ct_factor=1:length(factors)
     r = -vertcat(data_fac.rref_ti);
     v = vertcat(data_fac.vmean_ti);
     delta_y = vertcat(data_fac.yrange);
-
+    delta_t = vertcat(data_fac.fd_actual_ti);
+    
 %     speed3d = vertcat(data_fac.speed3d_mean_ti);
 
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(flightID{:}) vertcat(setID{:}) vertcat(day{:}) ...
-        vertcat(patternnum{:}) y r v factor*ones(size(r,1),1) delta_y];
+        vertcat(patternnum{:}) y r v factor*ones(size(r,1),1) delta_y delta_t];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -296,7 +297,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','flightID','setID','day','patternnum','y','r','v','threshold','delta_y'});
+        'VariableNames',{'approach','flightID','setID','day','patternnum','y','r','v','threshold','delta_y','delta_t'});
     T.beeID = beeID;
     writetable(T,r_file);
 end
@@ -417,7 +418,7 @@ legend boxoff
 clc; close all;
 clear;
 
-inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
@@ -457,6 +458,11 @@ indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-chos
 dummy.tracks_fac = state_LDF(indices);
 dummy.landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
 data = [data; dummy];
+
+patterns = unique([landing_tracks.patternnum]);
+for ct=1:length(patterns)
+    disp(['Pattern ' num2str(patterns(ct)), ', landing tracks ' num2str(sum([landing_tracks.patternnum] == patterns(ct)))]);
+end
 
 %% Create Trajectories' views with constant-r segments highlighted
 close all;
@@ -618,6 +624,12 @@ xline(r_edge1,'m'); xline(r_edge2,'g');
 %% Panel d for Figure 4 (ymean vs rref)
 % plotted only for tracks containing >1 r* segments
 
+has_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)>=1,data(ct).tracks_fac);
+N = sum(has_rrefs);
+
+has_one_rref = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)==1,data(ct).tracks_fac);
+N = sum(has_one_rref);
+
 close all; clc;
 saveDir = '/home/reken001/Pulkit/graphs_temp';
 cmap = [60 180 75; 245 130 48; 0 130 200]/255; % [green orange blue]
@@ -628,6 +640,9 @@ delta_rrref_negjumps = cell(length(data),1); % change in rref between two consec
 
 rref_posjumps = cell(length(data),1); 
 rref_negjumps = cell(length(data),1); 
+
+y_posjumps = cell(length(data),1); 
+y_negjumps = cell(length(data),1); 
 
 flightID_setID_patternnum_posjumps = cell(length(data),1); 
 flightID_setID_patternnum_negjumps = cell(length(data),1); 
@@ -653,6 +668,7 @@ for ct=1:length(data)
 %     track_indx = arrayfun(@(x) x*ones(length(data_ss(x).rrefSegments(abs([data_ss(x).rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti),1),1:N,'UniformOutput',false);
     
     jumps = cell(size(ymean));
+    y_at_jumps = cell(size(ymean));
     jump_ratios = cell(size(ymean));
     jumps_rrefs = cell(size(ymean)); % r* from which jump occured
     flightID_setID_patternnum = cell(size(ymean));
@@ -671,6 +687,7 @@ for ct=1:length(data)
         
         % Finding whether the next r* is higher or lower
         jumps{ct1} = diff(y_r);
+        y_at_jumps{ct1} = y_r(1:end-1,1);
         jump_ratios{ct1} = y_r(2:end,2)./y_r(1:end-1,2);
         jumps_rrefs{ct1} = y_r(1:end-1,2);
         flightID_setID_patternnum{ct1} = [landingTracks(ct1).flightID*ones(size(jumps{ct1},1),1) ...
@@ -701,11 +718,15 @@ for ct=1:length(data)
 
         
     end
-    disp(['# r*segments in tracks with >1 r* segments for chosen fac: ' num2str(length(vertcat(ymean{:})))]);
+    disp(['# r* segments in tracks with >1 r* segments for chosen fac: ' num2str(length(vertcat(ymean{:})))]);
     
     dummy = vertcat(jumps{:});
     delta_rrref_posjumps{ct} = dummy(dummy(:,2)>0,2);
     delta_rrref_negjumps{ct} = dummy(dummy(:,2)<0,2);
+    
+    dummy0 = vertcat(y_at_jumps{:});
+    y_posjumps{ct} = dummy0(dummy(:,2)>0);
+    y_negjumps{ct} = dummy0(dummy(:,2)<0);
     
     dummy0 = vertcat(jumps_rrefs{:});
     rref_posjumps{ct} = dummy0(dummy(:,2)>0);
@@ -727,8 +748,8 @@ for ct=1:length(data)
     disp(['% of # of +ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)>0)/(sum(dummy(:,2)<0)+sum(dummy(:,2)>0)))]);
     disp(['% of # of -ve jumps in r* for chosen fac: ' num2str(sum(dummy(:,2)<0)/(sum(dummy(:,2)<0)+sum(dummy(:,2)>0)))]);
     
-    disp(['Mean +ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)>0, 2)))]);
-    disp(['Mean -ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)<0, 2)))]);
+    disp(['Mean +ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)>0, 2))) '[' num2str(std(dummy(dummy(:,2)>0, 2))) ']']);
+    disp(['Mean -ve jumps in r* for chosen fac: ' num2str(mean(dummy(dummy(:,2)<0, 2))) '[' num2str(std(dummy(dummy(:,2)<0, 2))) ']']);
     
     plotHandle.Position(3) = 680; plotHandle.Position(4) = 545;
     
@@ -872,13 +893,13 @@ plot(rref_vec,modelfun(Coefficients,rref_vec),'Color', [0 0 0], 'LineWidth', 2);
 
 clc;
 writeFile = true;
-r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_deltar_vs_rref_Rstudio.txt';
-data_write = [delta_rrref_posjumps{:}, rref_posjumps{:}, flightID_setID_patternnum_posjumps{:};
-              delta_rrref_negjumps{:}, rref_negjumps{:}, flightID_setID_patternnum_negjumps{:}];
+r_file = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/data_deltar_vs_rref_Rstudio.txt';
+data_write = [delta_rrref_posjumps{:}, rref_posjumps{:}, y_posjumps{:}, flightID_setID_patternnum_posjumps{:};
+              delta_rrref_negjumps{:}, rref_negjumps{:}, y_negjumps{:}, flightID_setID_patternnum_negjumps{:}];
           
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'deltar','r','flightID','setID','patternnum'});
+        'VariableNames',{'deltar','r','y','flightID','setID','patternnum'});
     writetable(T,r_file);
 end
 %% Panel d for Figure 4 (ymean vs rref)

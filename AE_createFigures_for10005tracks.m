@@ -11,10 +11,10 @@ addpath('./lib/diffxy');
 
 clc; close all;
 clear dummy
-% clear;
+clear;
 
-inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
-% load(inputFile);
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+load(inputFile);
 
 landing_tracks = [landingTracks{:}];
 patternnums = unique([landing_tracks.patternnum]);
@@ -202,7 +202,7 @@ legend(patternKey(arrayfun(@(x) find(x==patternnums),patterns)));
 close all;
 ybins = -0.5:0.005:-0.01;
 
-clusters = {[6, 18], [3,7,8,9,10,11],[4,5]};
+clusters = {[6, 18, 8], [3,7,9,10,11], [4,5]};
 
 cmap = lines(length(clusters));
 % cmap([2 5],:) = [];
@@ -283,7 +283,7 @@ legend(cellfun(@(x) num2str(x), clusters, 'UniformOutput', false));
 
 %%  Write file for analysis of average tracks in R 
 writeFile = true;
-r_file = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/data_all_trajs_Rstudio.txt';
+r_file = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/data_all_trajs_Rstudio.txt';
 data_write = [];
 approach_no = 0;
 yrange = [-0.35 -0.15];

@@ -24,12 +24,13 @@ addpath('./lib/flymovieformat');
 % to include hline and vline function
 addpath('./lib/hline_vline');
 
-%% Load and process landings from free-flight for bumblebees
+%% Load and process landings from free-flight and high light condition for bumblebees
 
 clc; close all;
 % clear;
 % 
-inputFile = '/media/reken001/Disk_12/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+% inputFile = '/media/reken001/Disk_12/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 % inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 % load(inputFile);
 treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
@@ -145,7 +146,7 @@ end
 %% Load and process landings of honeybes
 clc; close all;
 
-inputFile = '/media/reken001/Disk_12/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
