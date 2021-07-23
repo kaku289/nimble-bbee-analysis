@@ -36,7 +36,13 @@ if isunix
     hotwirDir = '/media/reken001/Disk_09/unsteady_wind_experiments/Hotwire';
     % videoScoringDir = 'postprocessing';
 elseif ispc
-    rootDir = 'D:/steady_wind_experiments';
+    rootDir = '';
+    metadataDir = 'E:\unsteady_wind_experiments\Metadata';
+    calibDir = 'E:\unsteady_wind_experiments\Calibration\xml';
+    tempRHDir = 'E:\unsteady_wind_experiments\TempRH';
+    trackingDir = 'D:\unsteady_wind_experiments\postprocessing';
+    videosDir = 'E:\unsteady_wind_experiments\Videos';
+    hotwirDir = 'E:\unsteady_wind_experiments\Hotwire';
 end
 
 %% Initializing variables
@@ -60,6 +66,7 @@ filecalib = 'calibration.xml';
 treatmentSchedule = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','C4:T13');
 startTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','A6:A13');
 endTimes = readmatrix(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','B6:B13');
+isHWgood = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','C69:T76');
 
 % % Read manually clicked 2-D disc centers 
 discCenters_2d.Hive = readcell(fullfile(rootDir, trackingDir, 'Disc_centers.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','A2:I22');
@@ -99,14 +106,18 @@ end
 
 %% Read hotwire data files
 createHWplots = true;
-plotDir = '/media/reken001/Disk_12/unsteady_wind_experiments/postprocessing/plots/hotwire';
+if isunix
+    plotDir = [trackingDir '/plots/hotwire'];
+elseif ispc
+    plotDir = [trackingDir '\plots\hotwire'];
+end
 hotwireFiles = dir(fullfile(rootDir, hotwirDir, '2019*.csv'));
 
-for ct_treatment=1:length(treatments)
+parfor ct_treatment=1:length(treatments)
     treatment = treatments(ct_treatment);
     hwfiles4treatment = hotwireFiles( arrayfun(@(x) treatment.datenum==str2double(x.name(1:8)) & ...
                         (treatment.startTime <= str2double(x.name(10:15)) & treatment.endTime >= str2double(x.name(10:15))) , hotwireFiles) );
-    treatment.hwData = hotwireData(hwfiles4treatment);
+    treatments(ct_treatment).hwData = hotwireData(hwfiles4treatment);
     
 %     if ~isempty(hwfiles4treatment)  
 %         
@@ -160,9 +171,9 @@ if createHWplots
         figHandle.Position(3) = 1020;
         figHandle.Position(4) = 530;
         figureName = [num2str(currentDate) '.png'];
-%         saveas(figHandle, fullfile(plotDir, figureName) ,'png');
-%         print(figHandle, strrep(fullfile(plotDir, figureName), ...
-%                                             '.png','.pdf'), '-dpdf');
+        saveas(figHandle, fullfile(plotDir, figureName) ,'png');
+        print(figHandle, strrep(fullfile(plotDir, figureName), ...
+                                            '.png','.pdf'), '-dpdf');
         close(figHandle);
 
         figHandle2 = figure;
@@ -186,54 +197,70 @@ if createHWplots
 end
 %% Finding if a treatment has uniform hotwire measurements
 clc;
-behaviour = {'rising','constant','sleeping'};
+% behaviour = {'rising','constant','sleeping'};
 winds = unique([treatments.wind]);
-expectedMeanVoltages = [1.3115, 1.3935, 1.4954, 1.5769, 1.6377, 1.6906]; % calculated from 20190722
-expectedMeanVoltages_upperLimit = [arrayfun(@(x) sum(expectedMeanVoltages(x:x+1))/2,1:length(expectedMeanVoltages)-1) 1.7];
-expectedMeanVoltages_lowerLimit = [1.25   1.33    1.425    1.5    1.55   1.63];
-for ct = 1:length(treatments)
-    treatment = treatments(ct);
-    
-    if treatment.startTime >= 080000 && treatment.endTime <= 170000 && ~isempty(treatment.hwData.hwFiles)
-        wind = treatment.wind;
-        if all(horzcat(treatment.hwData.meanVoltage_persec{:}) <= expectedMeanVoltages_upperLimit(wind)) && ...
-            all(horzcat(treatment.hwData.meanVoltage_persec{:}) >= expectedMeanVoltages_lowerLimit(wind))    
-            treatment.hwData.hasUniformHwData = true;
-        else
-            treatment.hwData.hasUniformHwData = false;
-            disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
-        end
-        
-%         if wind==1
-%             if all(horzcat(treatment.hwData.meanVoltage_persec{:}) < expectedMeanVoltages_limits(wind))
-%                 treatment.hwData.hasUniformHwData = true;
-%             else
-%                 treatment.hwData.hasUniformHwData = false;
-%                 disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
-%             end
-%         elseif wind==6
-%             if all(horzcat(treatment.hwData.meanVoltage_persec{:}) > expectedMeanVoltages_limits(wind-1))
-%                 treatment.hwData.hasUniformHwData = true;
-%             else
-%                 treatment.hwData.hasUniformHwData = false;
-%                 disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
-%             end
-%         elseif wind>=2 && wind<=5
-%             if all(horzcat(treatment.hwData.meanVoltage_persec{:}) < expectedMeanVoltages_limits(wind)) && ...
-%                all(horzcat(treatment.hwData.meanVoltage_persec{:}) > expectedMeanVoltages_limits(wind-1))
-%                 treatment.hwData.hasUniformHwData = true;
-%             else
-%                 treatment.hwData.hasUniformHwData = false;
-%                 disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
-%             end
-%         end
-    elseif treatment.startTime >= 080000 && treatment.endTime <= 170000 && isempty(treatment.hwData.hwFiles)
-        treatment.hwData.hasUniformHwData = false;
-        disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
+windGroups = {[1 2 3 4 5 6 7 24 13],   [8 9 10 11 12 23 15 ];  [16 17 18 19 22 20],   [26]};
+% isHWgood = readcell(fullfile(rootDir, trackingDir, 'treatment_schedule.xlsx'),'FileType','spreadsheet','Sheet','oscillating wind','Range','C69:T76');
+
+for ct_day=1:size(treatmentSchedule,2)
+    for ct_treatment=1:8
+        %  Visual inspection of HW plots generated is used to verify
+        %  whether hot-wire measurements are good in a treatment or not
+        %  Note that for now only mean voltage is checked. Frequency is yet
+        %  to be checked!
+        treatment = treatments((ct_day-1)*8+ct_treatment);
+        treatment.hwData.hasUniformHwData = isHWgood{ct_treatment,ct_day};
+        disp([num2str(treatment.datenum) ' ' num2str(treatment.startTime) ' ' num2str(treatment.hwData.hasUniformHwData)]);
     end
 end
-% hwData = [treatments.hwData];
-% sum([treatments.startTime]>=080000 & [treatments.endTime]<=170000 & ~isempty(hwData.hwFiles))
+
+% From steady wind analysis
+% expectedMeanVoltages = [1.3115, 1.3935, 1.4954, 1.5769, 1.6377, 1.6906]; % calculated from 20190722
+% expectedMeanVoltages_upperLimit = [arrayfun(@(x) sum(expectedMeanVoltages(x:x+1))/2,1:length(expectedMeanVoltages)-1) 1.7];
+% expectedMeanVoltages_lowerLimit = [1.25   1.33    1.425    1.5    1.55   1.63];
+% for ct = 1:length(treatments)
+%     treatment = treatments(ct);
+%     
+%     if treatment.startTime >= 080000 && treatment.endTime <= 170000 && ~isempty(treatment.hwData.hwFiles)
+%         wind = treatment.wind;
+%         if all(horzcat(treatment.hwData.meanVoltage_persec{:}) <= expectedMeanVoltages_upperLimit(wind)) && ...
+%             all(horzcat(treatment.hwData.meanVoltage_persec{:}) >= expectedMeanVoltages_lowerLimit(wind))    
+%             treatment.hwData.hasUniformHwData = true;
+%         else
+%             treatment.hwData.hasUniformHwData = false;
+%             disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
+%         end
+%         
+% %         if wind==1
+% %             if all(horzcat(treatment.hwData.meanVoltage_persec{:}) < expectedMeanVoltages_limits(wind))
+% %                 treatment.hwData.hasUniformHwData = true;
+% %             else
+% %                 treatment.hwData.hasUniformHwData = false;
+% %                 disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
+% %             end
+% %         elseif wind==6
+% %             if all(horzcat(treatment.hwData.meanVoltage_persec{:}) > expectedMeanVoltages_limits(wind-1))
+% %                 treatment.hwData.hasUniformHwData = true;
+% %             else
+% %                 treatment.hwData.hasUniformHwData = false;
+% %                 disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
+% %             end
+% %         elseif wind>=2 && wind<=5
+% %             if all(horzcat(treatment.hwData.meanVoltage_persec{:}) < expectedMeanVoltages_limits(wind)) && ...
+% %                all(horzcat(treatment.hwData.meanVoltage_persec{:}) > expectedMeanVoltages_limits(wind-1))
+% %                 treatment.hwData.hasUniformHwData = true;
+% %             else
+% %                 treatment.hwData.hasUniformHwData = false;
+% %                 disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
+% %             end
+% %         end
+%     elseif treatment.startTime >= 080000 && treatment.endTime <= 170000 && isempty(treatment.hwData.hwFiles)
+%         treatment.hwData.hasUniformHwData = false;
+%         disp([num2str(treatment.datenum) '_' num2str(treatment.startTime) '_' num2str(treatment.endTime)])
+%     end
+% end
+% % hwData = [treatments.hwData];
+% % sum([treatments.startTime]>=080000 & [treatments.endTime]<=170000 & ~isempty(hwData.hwFiles))
 %% Finding landing tracks in each treatment
 y_margin = 0.02; % in m
 Vgy_margin = 0.25; % % in m/s
@@ -252,7 +279,15 @@ datenums = num2cell(cellfun(@(x) str2double(x(1:8)), {tracking_files(:).name}));
 for ct_treatment=1:length(treatments) % for each treatment
     treatment = treatments(ct_treatment); % Always remember working by reference here
     
-    
+    % Observation for 06082019 - Landing pattern on feeder side got loose
+    % between 08:00-09:30h. It was like that until 15:30. But this was fixed 
+    % for the treatment in 15:30-17:00h. Landings on the hive can be used
+    % for first five treatments and landings on both hive and feeder can be
+    % used for the last treatment. This makes the code complicated.
+    % Therefore, for now discarding 06082019 altogether.
+    if treatment.datenum == 20190806
+        continue;
+    end
     
     % Find tracking files (also in case multiple files exist)
     % corresponding to this treatment
@@ -528,7 +563,7 @@ for ct_treatment=1:length(treatments) % for each treatment
     
     
 end
-save(fullfile(rootDir, trackingDir, 'BlindLandingtracks_A3.mat'), 'treatments');
+save(fullfile(rootDir, trackingDir, 'BlindLandingtracks_unsteady_A3.mat'), 'treatments');
 keyboard;
 
 
@@ -537,13 +572,13 @@ clc; close all;
 % clear;
 
 % Inputs
-% inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3.mat';
+% inputFile = fullfile(rootDir, trackingDir, 'BlindLandingtracks_unsteady_A3.mat');
 % load(inputFile);
 
 behaviour = {'rising','constant','sleeping'};
 winds = unique([treatments.wind]);
 for ct_wind = 1:length(winds)
-        for ct_behaviour = 1:length(behaviour)
+        for ct_behaviour = 2%1:length(behaviour)
             
             disp(['Wind: ' num2str(winds(ct_wind)) ...
                   ', behaviour: ' behaviour{ct_behaviour}]);
@@ -556,6 +591,11 @@ for ct_wind = 1:length(winds)
                                      rem(1:length(treatments), 8)>1 & ...
                                      rem(1:length(treatments), 8)<8);
                                  
+                % Only analyse treatments that have uniform wind measurements
+                % avaliable throughout their course of running                 
+                hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+                relevantTreatments = relevantTreatments(hasUniformHwData);
+                
                 landingTracks = [relevantTreatments.landingTracks];
                                  
                 % # of landing tracks
@@ -581,11 +621,11 @@ keyboard;
 % easier
 
 clc; close all; 
-clear;
+% clear;
 
 % % % Inputs
-inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3.mat';
-load(inputFile);
+% inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3.mat';
+% load(inputFile);
 
 for ct_treatment=1:length(treatments)
     treatment = treatments(ct_treatment);
@@ -599,7 +639,7 @@ for ct_treatment=1:length(treatments)
         landingTrack.compute_rawData_in_LDF(landingDiscs);
     end
 end
-outputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
+outputFile = fullfile(rootDir, trackingDir, 'BlindLandingtracks_unsteady_A3_LDF.mat');
 save(outputFile, 'treatments', '-v7.3', '-nocompression');
 
 %% CODE AFTER THIS IS NOT CHECKED - IT MIGHT NOT WORK WITH THE NEW VERSION OF TRACK DEFINITIONS.

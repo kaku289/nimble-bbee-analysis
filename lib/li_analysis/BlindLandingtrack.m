@@ -1260,6 +1260,95 @@ classdef BlindLandingtrack < handle
             end
         end
         
+        function plotHandles = plotDataLDF_Time3_forArticle(state_LDF, t_start)
+            % Plot optical flow parameters
+            % These parameters are plotted with time
+            
+            % state_LDF - instance of filteredState_BlindLandingTrack
+            % t_start - 
+           
+
+            filteredState = state_LDF.filteredState;
+            state_subset = filteredState; % filteredState(filteredState(:,1)-filteredState(end,1)>=-1.3,:);
+%             t0 = filteredState(find(filteredState(:,1)>t_start,1),1);
+            state_subset = filteredState(filteredState(:,1)>=t_start,:);
+            
+            tend = filteredState(end,1);
+            
+            if nargin == 2
+                opticalExpansionPlot = figure;
+                figure(opticalExpansionPlot);
+                
+                subplotHandles(1) = subplot(4,1,1); hold on;
+%                 plot(state_subset(:,1)-t0, -1*state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                plot(state_subset(:,1)-tend, -1*state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('y (m)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+                
+                subplotHandles(2) = subplot(4,1,2); hold on;
+%                 plot(state_subset(:,1)-t0, state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                plot(state_subset(:,1)-tend, state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('V (m/s)', 'FontSize', 16);
+    %             ylabel('Optical rate of expansion (1/s)', 'FontSize', 15);
+                set(gca, 'FontSize', 15); grid on;
+                
+                subplotHandles(3) = subplot(4,1,3); hold on;
+                plot(state_subset(:,1)-tend, state_subset(:,9),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('a (m/s^2)', 'FontSize', 16);
+%                 xlabel('time (s)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+                
+                subplotHandles(4) = subplot(4,1,4); hold on;
+%                 plot(state_subset(:,1)-t0, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                plot(state_subset(:,1)-tend, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('r (rad/s)', 'FontSize', 16);
+                xlabel('time (s)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+
+                
+                
+                
+                plotHandles = [opticalExpansionPlot];
+                linkaxes(subplotHandles(1:4),'x');
+            end
+        end
+        
+        function plotHandles = plotDataLDF_Distance3_forArticle(state_LDF, t_start)
+            % Plot optical flow parameters
+            % These parameters are plotted with distance
+            
+            % state_LDF - instance of filteredState_BlindLandingTrack
+            % t_start - 
+           
+
+            filteredState = state_LDF.filteredState;
+            state_subset = filteredState; % filteredState(filteredState(:,1)-filteredState(end,1)>=-1.3,:);
+%             t0 = filteredState(find(filteredState(:,1)>t_start,1),1);
+            state_subset = filteredState(filteredState(:,1)>=t_start,:);
+            
+            tend = filteredState(end,1);
+            
+            if nargin == 2
+                opticalExpansionPlot = figure;
+                figure(opticalExpansionPlot);
+                
+                subplotHandles(1) = subplot(2,1,1); hold on;
+                plot(-state_subset(:,3), state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('V (ms-1)', 'FontSize', 16);
+    %             ylabel('Optical rate of expansion (1/s)', 'FontSize', 15);
+                set(gca, 'FontSize', 15); grid on;
+                
+                subplotHandles(2) = subplot(2,1,2); hold on;
+                plot(-state_subset(:,3), -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
+                ylabel('r (s-1)', 'FontSize', 16);
+                xlabel('Distance to surface y (m)', 'FontSize', 16);
+                set(gca, 'FontSize', 15); grid on;
+                
+                plotHandles = [opticalExpansionPlot];
+                linkaxes(subplotHandles(1:2),'x');
+            end
+        end
+        
         
         function plotHandles = plotDataLDF_Time(state_LDF, subplotHandles)
             % Plot optical flow parameters
