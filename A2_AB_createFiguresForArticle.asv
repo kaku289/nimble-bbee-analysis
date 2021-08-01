@@ -264,7 +264,6 @@ zeta_figHandle = createBoxPlot({zeta{:}}', {labels{:}}', 'Damping'); ylim([-Inf 
 %%
 % First extract rdot estimate for chosen factor using
 % A2_AA_extract_rrefEntrySegments_with_rdot_ystart.m
-clc;
 if isunix
     DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/articleA2_plots';
 elseif ispc
@@ -279,8 +278,7 @@ pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};
 chosen_fac = 1.5;
 % behaviour = {'rising','constant','sleeping'};
-selected_tracks = {'20190704_153000_170000_obj7984_track234_excerpt1', '20190704_153000_170000_obj9821_track290_excerpt1', '20190708_140000_153000_obj664_track13_excerpt1', ...
-                   '20190704_153000_170000_obj3509_track95_excerpt2', '20190708_140000_153000_obj6369_track116_excerpt1'};
+selected_tracks = {'20190704_153000_170000_obj7984_track234_excerpt1', '20190704_153000_170000_obj9821_track290_excerpt1', '20190708_140000_153000_obj664_track13_excerpt1', '20190704_153000_170000_obj3509_track95_excerpt2'};
 
 for ct_pattern=2%1:length(pattern)
     for ct_light=3%1:length(light)
@@ -313,20 +311,17 @@ for ct_pattern=2%1:length(pattern)
             error('What other treatments did you perform dude?')
         end
         
-        treatmentIndices = cell(length(relevantTreatments),1);
+        hastakeoff = cell(length(relevantTreatments),1);
         for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
-            treatment = relevantTreatments(ct_treatment);
-            dummy = ct_treatment*ones(length([treatment.landingTracks]),1);
-%             dummy = arrayfun(@(x,indx) indx*ones(length(x.state_LDF),1), [treatment.landingTracks], treatmentIndices4landingTracks,'UniformOutput',false);
-            treatmentIndices{ct_treatment} = dummy;
+            arrayfun(@(x), ct_treatment*ones(length([treatment.landingTracks]),1),'UniformOutput',false);
+                treatment = relevantTreatments(ct_treatment);
                 
-                
-%                 hastakeoff_pertreatment = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs),[treatment.landingTracks.state_LDF]','UniformOutput',false);
-% %                 hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
-%                 hastakeoff{ct_treatment} = hastakeoff_pertreatment;
+                hastakeoff_pertreatment = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs),[treatment.landingTracks.state_LDF]','UniformOutput',false);
+%                 hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
+                hastakeoff{ct_treatment} = hastakeoff_pertreatment;
         end
 %         hastakeoff = vertcat(hastakeoff{:})
-        treatmentIndices = vertcat(treatmentIndices{:});  
+        treatmentIndices4stateLDF = 
         
         landingTracks = [relevantTreatments.landingTracks];
         
@@ -334,30 +329,28 @@ for ct_pattern=2%1:length(pattern)
         datenum = [landingTracks.datenum];
         obj_id = [landingTracks.obj_id];
         
-        for ct2=5%1:length(selected_tracks)
+        for ct2=1:length(selected_tracks)
             selected_track_str = selected_tracks{ct2};
             selected_track_str_parts = strsplit(selected_track_str,'_');
             
             indx = find(datenum == str2num(selected_track_str_parts{1}) & obj_id == str2num(selected_track_str_parts{4}(4:end)));
-%             assert(length(indx)==1); % If not, tighten the indx selection with starting time of the treatment
+            assert(length(indx)==1); % If not, tighten the indx selection with starting time of the treatment
             
-            ct1 = indx(2)           
+            ct1 = indx;           
            
             excerpt = str2num(selected_track_str_parts{end}(end));
-            hasTakeoff = landingTracks(ct1).state_LDF(excerpt).hasTakeoff(relevantTreatments(treatmentIndices(ct1)).landingDiscs)
-
             % For plotting rdotestimate 
 %             plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_with_rdotestimate(chosen_fac)
-            
+
             % For plotting rref curves (same as Article 1) - size (680 545)
-%             plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefs(chosen_fac);
+            plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefs(chosen_fac);
             
 
             % For plotting V vs t curve
 %             plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_for_Vvst(chosen_fac)
             
             % For plotting V,r,A vs y curve
-            plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_with_acc(chosen_fac)
+%             plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_with_acc(chosen_fac)
             
             
             if ~isempty(plotHandles)

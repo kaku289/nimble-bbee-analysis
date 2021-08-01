@@ -406,15 +406,7 @@ dayCol = 6;
 rdotCol =9;
 factorCol = 10;
 isriseCol = 11;
-deltaVCol = 15;
-deltatCol = 16;
-% ameanCol = 17;
-ameanCol = 18;
-
-data_write(:,18) = data_write(:,deltaVCol)./data_write(:,deltatCol);
-dvdtCol = size(data_write,2);
 data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
-data_ss = data_write(data_write(:,isriseCol) == 1 & data_write(:,ameanCol) >0 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 
 figure;
 % histogram(data_ss(:,rdotCol));
@@ -468,18 +460,19 @@ deltarCol = 12;
 deltaVCol = 15;
 deltatCol = 16;
 hasTakeoffCol = 13;
-% ameanCol = 17;
+ameanCol = 17;
 % data_write(:,end+1) = data_write(:,rrefCol)-data_write(:,deltarCol);
 % r0Col = size(data_write,2);
-
+data_write(:,end+1) = data_write(:,deltaVCol)./data_write(:,deltatCol);
+dvdtCol = size(data_write,2);
 % rdotCol = ameanCol; %dvdtCol;
+
 % get subset of data
 
 chosen_fac = 1.5;
 data_ss = data_write(abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 data_ss = data_write(data_write(:,isriseCol) == 1 & data_write(:,hasTakeoffCol) == 0 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
-data_ss = data_write(data_write(:,isriseCol) == 1 & data_write(:,hasTakeoffCol) == 0 & data_write(:,ameanCol) >0 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 
 % Create basic plots
 figure;
@@ -1297,9 +1290,9 @@ close all;
 rdot = data_ss(:,rdotCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
 
 % values for which lines will be plotted
-y_chosen = 0.21; %quantile(y, 0.5); % mean(y)
+y_chosen = 0.22; %quantile(y, 0.5); % mean(y)
 y_bin = 0.06; %mean(y) std(y)
-deltar_chosen = 1.68; quantile(deltar, 0.5); %mean(delta_r) std(delta_r)
+deltar_chosen = 1.67; quantile(deltar, 0.5); %mean(delta_r) std(delta_r)
 deltar_bin = 0.8;
 
 % Untransformed domain

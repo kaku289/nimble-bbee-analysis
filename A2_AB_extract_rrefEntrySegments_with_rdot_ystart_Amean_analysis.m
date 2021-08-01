@@ -29,9 +29,9 @@ acc_actual_hastakeoff1 = vertcat(data_fac(hasTakeoff_fac==1).acc_actual);
 acc_actual_hastakeoff1 = vertcat(acc_actual_hastakeoff1{:});
 map = brewermap(3,'Set1'); 
 figure;
-histfit(acc_actual_hastakeoff1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+histogram(acc_actual_hastakeoff1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
 hold on;
-histogram(acc_actual_hastakeoff0,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+histogram(acc_actual_hastakeoff0,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
 legend('From take-off','From free-flight','fontsize',16)
 xlabel('acc actual (m/s-2)', 'FontSize', 16);
 ylabel('Occurences', 'FontSize', 16);
@@ -44,9 +44,9 @@ acc_actual_light3 = vertcat(data_fac([data_fac.light] == 3).acc_actual);
 acc_actual_light3 = vertcat(acc_actual_light3{:});
 map = brewermap(3,'Set1'); 
 figure;
-histogram(acc_actual_light1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+histogram(acc_actual_light1,'facecolor',map(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
 hold on;
-histogram(acc_actual_light3,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+histogram(acc_actual_light3,'facecolor',map(3,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
 legend('low light','high light','fontsize',16)
 xlabel('acc actual (m/s-2)', 'FontSize', 16);
 ylabel('Occurences', 'FontSize', 16);
@@ -69,18 +69,43 @@ axis tight
 % set(gca, 'FontSize', 16);
 % axis tight
 
+%% Plot histogram of Amean
+chosen_fac = 1.5;
+dayCol = 6;
+rdotCol =9;
+factorCol = 10;
+isriseCol = 11;
+ameanCol = 18;
+data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
+% data_ss = data_write(abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
+data_ss = data_write(data_write(:,isriseCol) == 1 & data_write(:,ameanCol) >0 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
+
+figure;
+histogram(data_ss(:,ameanCol));
+% histfit(data_ss(:,ameanCol),[],'gamma')
+xlim([-Inf 5.5]);
+xticks([-1:1:5]);
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+
+xlabel('Mean accleration during entry segments, Amean (ms-2)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+% pd = fitdist(data_ss(:,rdotCol),'Gamma');
+median(data_ss(:,ameanCol))
+
+
 %% Plot results from Amean model
 %% Plot statistical model from R
 close all;
 % R model
-% Factor = 1.5, with ymean as y
-% coeffs = [1.41786160 -0.23188443  0.03265318  0.10269169 -0.12191186  0.30937950 -0.36988825 -0.11229241]; % [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
-
-% Factor = 1.5, with ystart as y
-% coeffs = [1.33920177 -0.29558317  0.03165654  0.09682028 -0.15971722  0.30151310 -0.35868115 0]; % [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
 
 % Factor = 1, with ystart as y
-coeffs = [1.58702290  0.42800399  0.05374526  0.16907431  0.32467186 -1.45318255 -0.58756146 0];
+% coeffs = [1.58702290  0.42800399  0.05374526  0.16907431  0.32467186 -1.45318255 -0.58756146 0];
+
+% Factor = 1.5, with ystart as y and inclduing hasTakeoff as a factor
+coeffs = [1.77080369  0.50743000  0.04233314  0.14084481  0.42358406 -1.47303718 -0.55294707 0]; % [intercept logy light2 light3 log(deltar) log(rref) logy:log(deltar) log(deltar):log(rref)]
+
 % data_all.approach = data_write(:,1);
 % data_all.landingSide = data_write(:,2);
 % data_all.pattern = data_write(:,3);
@@ -103,6 +128,7 @@ rdotCol = 9;
 factorCol = 10;
 isriseCol = 11;
 deltarCol = 12;
+hasTakeoffCol = 13;
 deltaVCol = 15;
 deltatCol = 16;
 ameanCol = 17;
@@ -115,10 +141,11 @@ ameanCol = 18;
 
 % get subset of data
 
-chosen_fac = 1;
+chosen_fac = 1.5;
 % data_ss = data_write(abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 % data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710 & data_write(:,ameanCol) > 0, :);
+data_ss = data_write(data_write(:,isriseCol) == 1 & data_write(:,hasTakeoffCol) == 0 & data_write(:,ameanCol) >0 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
 
 % Create basic plots
 figure;
@@ -169,27 +196,6 @@ xlabel('rref (s-1)', 'FontSize', 14);
 % ylabel('rdot (s-2)', 'FontSize', 14);
 % xlabel('r0 (s-1)', 'FontSize', 14);
 
-%% Plot histogram of Amean
-chosen_fac = 1;
-dayCol = 6;
-rdotCol =9;
-factorCol = 10;
-isriseCol = 11;
-ameanCol = 18;
-data_ss = data_write(data_write(:,isriseCol) == 1 & abs(data_write(:,factorCol) - chosen_fac) < 1e-6 & data_write(:,dayCol) <= 20190710, :);
-
-figure;
-histogram(data_ss(:,ameanCol));
-% histfit(data_ss(:,ameanCol),[],'Normal')
-% xlim([0 40]);
-% histogram(-vertcat(data.rmean), [0:0.5:8]);
-% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
-
-xlabel('Estimated rate-of-relative-rate-of-expansion, rdote (s-2)', 'FontSize', 16);
-ylabel('Occurences', 'FontSize', 16);
-set(gca, 'FontSize', 16);
-pd = fitdist(data_ss(:,rdotCol),'Gamma');
-median(data_ss(:,rdotCol))
 
 %% Plot Amean as a function of y, delta_r and rref (FINAL - TO BE USED)
 % deltar as x1, y as x2 and rref as x3
@@ -340,9 +346,9 @@ close all;
 amean = data_ss(:,ameanCol); y = data_ss(:,yCol); light = data_ss(:,lightCol); deltar = data_ss(:,deltarCol); rref = data_ss(:,rrefCol);
 
 % values for which lines will be plotted
-y_chosen = 0.22; %quantile(y, 0.5); % mean(y)
+y_chosen = 0.21; %quantile(y, 0.5); % mean(y)
 y_bin = 0.06; %mean(y) std(y)
-deltar_chosen = 1.67; quantile(deltar, 0.5); %mean(delta_r) std(delta_r)
+deltar_chosen = 1.68; quantile(deltar, 0.5); %mean(delta_r) std(delta_r)
 deltar_bin = 0.8;
 
 % Untransformed domain
