@@ -78,11 +78,18 @@ for ct_pattern = 1:length(pattern)
             state_LDF = [landingTracks.state_LDF];
             rrefSegs = [state_LDF.rrefSegments];
             
+            arrayfun(@(x) x.setLandingSide(),state_LDF); % to store landing side in the rrefSegments
+            
+            treatment_indx4landingTracks = arrayfun(@(x) x*ones(length(relevantTreatments(x).landingTracks),1),1:length(relevantTreatments), 'UniformOutput', false);
+            treatment_indx4landingTracks = vertcat(treatment_indx4landingTracks{:});
             treatment_indx4stateLDF = arrayfun(@(x) x*ones(length([relevantTreatments(x).landingTracks.state_LDF]),1),1:length(relevantTreatments), 'UniformOutput', false);
             treatment_indx4stateLDF = vertcat(treatment_indx4stateLDF{:});
             
             landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
             landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+            
+            landingDiscs = {relevantTreatments(treatment_indx4stateLDF).landingDiscs};
+            hastakeoff = arrayfun(@(x) state_LDF(x).hasTakeoff(landingDiscs{x}),1:length(state_LDF));
             
             % Display info about # of landing tracks
             disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
@@ -109,6 +116,7 @@ for ct_pattern = 1:length(pattern)
             dummy.ct_light = ct_light;
             dummy.landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
             dummy.landingDiscs = vertcat(relevantTreatments(treatment_indx4stateLDF(indices)).landingDiscs);
+            dummy.hastakeoff = hastakeoff(indices); %arrayfun(@(x) dummy.tracks_fac(x).hasTakeoff(dummy.landingDiscs{x}),1:length(dummy.tracks_fac));
             data = [data; dummy];
             
             
@@ -137,6 +145,74 @@ for ct_pattern = 1:length(pattern)
         end
     end
 end
+
+%% Extract data for statistical analysis during transition (deltar* vs r*)
+% only for tracks containing >1 r* segments
+% This analysis is used in honeybee chapter
+data_write = [];
+data_fac = data;
+factor = chosen_fac;
+approach = 0;
+for ct=1:length(data_fac)
+
+    has_multiple_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).rref_ti)>1,data_fac(ct).tracks_fac);
+    N = sum(has_multiple_rrefs);
+    data_ss = data_fac(ct).tracks_fac(has_multiple_rrefs);
+    hastakeoff = data_fac(ct).hastakeoff(has_multiple_rrefs);
+    landingTrack = data_fac(ct).landingTrack(has_multiple_rrefs);
+
+    for ct1=1:N % for each track
+        approach = approach + 1;
+        rmean = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).rmean_ti;
+        ymean = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).ymean_ti;
+        side = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).side;
+        intervals = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).intervals_ti;
+
+        [y_r, indices] = sortrows([-ymean -rmean ],1,'descend');
+        intervals = intervals(indices,:);
+
+        % for each transition: save following:
+        % [f wind hastakeoff y* r* deltar* deltat deltay Vmean approach
+        % landingside day]
+        for ct2=1:length(rmean)-1 % for each transition
+            deltat_y = diff(data_ss(ct1).filteredState([intervals(ct2,2) intervals(ct2+1,1)],[1 3]));
+            Vmean = mean(data_ss(ct1).filteredState(intervals(ct2,2):intervals(ct2+1,1),6));
+%                 if isnan(Vmean)
+%                     % The nan Vmeans correspond to bbees flying backwards
+%                     % in between two rref segments
+%                     keyboard;
+%                 end
+            data_write = [data_write;
+                          factor data_fac(ct).ct_pattern data_fac(ct).ct_light hastakeoff(ct1) ...
+                          y_r(ct2,1) y_r(ct2,2) y_r(ct2+1,2)-y_r(ct2,2) ...
+                          deltat_y Vmean ...
+                          approach side landingTrack(ct1).datenum];
+        end
+    end
+end  
+
+
+% Write file for statistical analysis in R
+% This file contains data for all the factors
+% clc;
+writeFile = true;
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_rref_transition_Rstudio.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_rref_transition_Rstudio.txt';
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'threshold','pattern','light','hasTakeoff','y','r','deltar',...
+                         'deltat','deltay','vmean','approach','landingSide','day'});
+    writetable(T,r_file);
+end
+
+% For checks (comment later)
+T = readtable(r_file);
+data_write = table2array(T);
+
 
 %% If landing tack started from the opposite disc
 %% Plot histogram of y_start and V_start for landing approaches
