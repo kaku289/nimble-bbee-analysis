@@ -302,6 +302,99 @@ if writeFile
     writetable(T,r_file);
 end
 
+%% Extract data for statistical analysis during transition (deltar* vs r*)
+% only for tracks containing >1 r* segments
+clc; close all;
+clear;
+
+inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+inputFile = 'C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A4\r_statistics\BlindLandingtracks_A4_LDF_rref.mat';
+load(inputFile);
+
+landing_tracks = [landingTracks{:}];
+static_patternnums = [1 2 3 4 5 6 7 8 9 10 11 18];
+landingTracks = landing_tracks(arrayfun(@(x) ismember(x,static_patternnums), [landing_tracks.patternnum]));
+stateLDF = [landingTracks.state_LDF];
+% landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+% landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+
+% Loading data and collecting segments with rref
+factors = [0.25:0.25:2.5];
+data_write = [];
+
+for ct_fac=1:length(factors)
+    factor = factors(ct_fac);
+    approach = 0;
+
+    has_multiple_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).rref_ti)>1, stateLDF);
+    N = sum(has_multiple_rrefs);
+    data_ss = stateLDF(has_multiple_rrefs);
+    landingTrack = landingTracks(has_multiple_rrefs);
+    
+    for ct1=1:N % for each track
+        approach = approach + 1;
+        rmean = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).rmean_ti;
+        ymean = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).ymean_ti;
+        intervals = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).intervals_ti;
+
+        [y_r, indices] = sortrows([-ymean -rmean ],1,'descend');
+        intervals = intervals(indices,:);
+
+        % for each transition: save following:
+        % [f patternnum y* r* deltar* deltat deltay Vmean approach
+        % setid flightid]
+        for ct2=1:length(rmean)-1 % for each transition
+            deltat_y = diff(data_ss(ct1).filteredState([intervals(ct2,2) intervals(ct2+1,1)],[1 3]));
+            Vmean = mean(data_ss(ct1).filteredState(intervals(ct2,2):intervals(ct2+1,1),6));
+%                 if isnan(Vmean)
+%                     % The nan Vmeans correspond to bbees flying backwards
+%                     % in between two rref segments
+%                     keyboard;
+%                 end
+            data_write = [data_write;
+                          factor landingTrack(ct1).patternnum ...
+                          y_r(ct2,1) y_r(ct2,2) y_r(ct2+1,2)-y_r(ct2,2) ...
+                          deltat_y Vmean ...
+                          landingTrack(ct1).setID landingTrack(ct1).flightID];
+        end
+    end
+end
+
+% Write file for statistical analysis in R
+% This file contains data for all the factors
+% clc;
+writeFile = false;
+if isunix
+    r_file = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/data_rref_transition_Rstudio.txt';
+elseif ispc
+    r_file = 'C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A4\r_statistics\data_rref_transition_Rstudio.txt';
+end
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'threshold','patternnum','y','r','deltar',...
+                         'deltat','deltay','vmean','setID','flightID'});
+    writetable(T,r_file);
+end
+
+%% Display data for a supplementary table
+patternOrder = [6 18 3 11 7 8 9 10 5 4];
+factors = 0.5:0.25:2.5;
+data = zeros(length(patternOrder), length(factors)+1);
+for ct=1:length(patternOrder)
+    pattern = patternOrder(ct);
+    
+    tracks = landingTracks([landingTracks.patternnum] == pattern);
+    data(ct,1) = length(tracks);
+    for ct1=1:length(factors)
+        factor = factors(ct1);
+        has_refs = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).rref_ti), [tracks.state_LDF]);
+        data(ct,ct1+1) = sum(has_refs);
+    end
+    
+end
+
+
 
 %% Plot y(end) for filteredState
 landing_tracks = [landingTracks{:}];

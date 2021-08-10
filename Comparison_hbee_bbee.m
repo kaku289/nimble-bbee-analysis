@@ -387,8 +387,22 @@ legend('honeybees','bumblebees','fontsize',16)
 xlabel('V_0 (ms-1)', 'FontSize', 16);
 ylabel('Probability density', 'FontSize', 16);
 set(gca, 'FontSize', 16);
-
-
+xlim([-3 6]);
+%% Compare histograms of delta_r* for honeybees and bumblebees
+Thbee = readtable('C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A4\r_statistics\data_deltar_vs_rref_Rstudio.txt');
+Tbbee = readtable('C:\Users\goyal001\OneDrive - WageningenUR\PhD\Articles\Article - A1\graphs_shared\data_rref_transition_Rstudio.txt');
+close all;
+points_cmap = [252,187,161;
+        200,200,200]./255;
+figure;
+histogram(Thbee.deltar,'facecolor',points_cmap(1,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+hold on;
+histogram(Tbbee.deltar(Tbbee.light==3 & Tbbee.hasTakeoff == 0),'facecolor',points_cmap(2,:),'facealpha',.5,'edgecolor','none','Normalization','pdf');
+legend('honeybees','bumblebees','fontsize',16)
+xlabel('deltar rrref (s-1)', 'FontSize', 16);
+ylabel('Probability density (s)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+% xlim([0 2.5]);    
 %% CODE below is not used
 
 %%
