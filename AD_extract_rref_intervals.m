@@ -208,6 +208,9 @@ for ct_pattern = 1:length(pattern)
                 data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
                 data1 = horzcat(data1{:});
                 
+                % compute whether or not instability follows
+                arrayfun(@(x) x.compute_instabilityFollows(0.05),[treatment.landingTracks.state_LDF]);
+
                 hastakeoff_pertreatment = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs)*ones(1,length(x.rrefSegments)),[treatment.landingTracks.state_LDF]','UniformOutput',false);
                 hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
                 % Discard empty intervals
@@ -263,6 +266,9 @@ for ct_factor=1:length(factors)
     r = -vertcat(data_fac.rref_ti);
     v = vertcat(data_fac.vmean_ti);
     
+    hasInstabilityAssociated = vertcat(data_fac.instabilityFollows);
+    y_rrefEnd = vertcat(data_fac.y_rrefEnd);
+    
     speed3d = vertcat(data_fac.speed3d_mean_ti);
 %     rSpeed3d = -vertcat(data_fac.rmean_speed3d_ti);
     
@@ -271,7 +277,8 @@ for ct_factor=1:length(factors)
         
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d vertcat(hasTakeoff_fac{:})];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d vertcat(hasTakeoff_fac{:}) ...
+        hasInstabilityAssociated y_rrefEnd];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -280,7 +287,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold', 'speed3d', 'hasTakeoff'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v','threshold', 'speed3d', 'hasTakeoff','hia','y_rrefEnd'});
     writetable(T,r_file);
 end
 

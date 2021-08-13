@@ -17,6 +17,17 @@ pattern = {'checkerboard', 'spokes'};
 light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 data_all = struct.empty;
+
+
+% Nperday = zeros(length(winds),1); % no. of state LDFs per day in different winds
+% % Nperday_aborted = zeros(length(winds),1); % no. of aborted state LDFs per day in different winds
+% NrelevantTreatments = zeros(length(winds),1);
+N_Ntakeoff_Nfreeflight_pattern_light_time_day = []; % For statistical analysis (# of landing approaches with wind, time of the day and day of the experiment)
+
+ygroups = 0.05:0.05:0.25; % y groups for instability checks
+vthreshold = 0.05; % in m/s
+data_instability = []; % [hasLowV ygroupnumber hasTakeoff pattern light approach landingSide day time]
+
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
         for ct_behaviour = 2%1:length(behaviour)
@@ -59,9 +70,34 @@ for ct_pattern = 1:length(pattern)
             disp(['# of distinct state LDFs: ' num2str(length([landingTracks.state_LDF]))]);
             
             hastakeoff_pertreatment = cell(0,1);
+            approach = 0;
             for ct_treatment = 1:length(relevantTreatments)
                 treatment = relevantTreatments(ct_treatment);
                 hastakeoff_pertreatment{ct_treatment} = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs),[treatment.landingTracks.state_LDF]);
+                N_Ntakeoff_Nfreeflight_pattern_light_time_day = [N_Ntakeoff_Nfreeflight_pattern_light_time_day;
+                                   length([treatment.landingTracks.state_LDF]) sum(hastakeoff_pertreatment{ct_treatment}) sum(~hastakeoff_pertreatment{ct_treatment}) ...
+                                   ct_pattern ct_light treatment.startTime treatment.datenum];
+                               
+                
+                % For instability
+                stateLDF = [treatment.landingTracks.state_LDF];
+                hasLowV = arrayfun(@(x) x.hasLowV(ygroups, vthreshold), stateLDF, 'UniformOutput', false);
+                hasLowV = vertcat(hasLowV{:});
+                ygroupnumber = repmat(1:4, size(hasLowV,1), 1);
+                hastakeoff = repmat(hastakeoff_pertreatment{ct_treatment}', 1, 4);
+                approach_mat = repmat([approach+1:approach+length(stateLDF)]', 1, 4);
+                
+                side = {stateLDF.landingSide};
+                isHive = cellfun(@(x) strcmpi(x,'hive'), side);
+                side_mat = ones(length(stateLDF),1); side_mat(~isHive) = 2;
+                side_mat = repmat(side_mat, 1, 4);
+
+                %  % [hasLowV ygroupnumber hasTakeoff pattern light approach landingSide day time]
+                data_instability = [data_instability;
+                                    hasLowV(:) ygroupnumber(:) hastakeoff(:) ct_pattern*ones(numel(hasLowV),1) ...
+                                    ct_light*ones(numel(hasLowV),1) approach_mat(:) side_mat(:) treatment.datenum*ones(numel(hasLowV),1) ...
+                                    treatment.startTime*ones(numel(hasLowV),1)];
+                approach = approach + length(stateLDF);
             end
             hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
             
@@ -73,6 +109,10 @@ for ct_pattern = 1:length(pattern)
             dummy.hastakeoff_pertreatment = hastakeoff_pertreatment;
             
             data_all = [data_all; dummy];
+            
+%             Nperday(ct_wind) = length([landingTracks.state_LDF]);
+% %             Nperday_aborted(ct_wind) = length([abortedLandingTracks.state_LDF]);
+%             NrelevantTreatments(ct_wind) = length(relevantTreatments);
   
         end
     end
@@ -119,10 +159,37 @@ axis tight
 xlim([0 2])
 
 [sum([data_all.hastakeoff_pertreatment]) sum(~[[data_all.hastakeoff_pertreatment]])]
-%%
+%% Write file for hasLowV (in R)
+writeFile = true;
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_hasLowV_Rstudio.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_hasLowV_Rstudio.txt';
+end
+if writeFile
+    % [hasLowV ygroupnumber hasTakeoff pattern light approach landingSide day time]
+    T = array2table(data_instability, ...
+        'VariableNames',{'hasLowV','ygroupnumber','hasTakeoff','pattern','light','approach','landingSide','day','time'});
+    writetable(T,r_file);
+end
+
+% Write file for N_track analysis in R
+writeFile = true;
+if isunix
+    r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_Ntracks_perTreatment_Rstudio.txt';
+elseif ispc
+    r_file = 'D:/light_intensity_experiments/postprocessing/data_Ntracks_perTreatment_Rstudio.txt';
+end
+if writeFile
+    T = array2table(N_Ntakeoff_Nfreeflight_pattern_light_time_day, ...
+        'VariableNames',{'N','Ntakeoff','Nfreeflight','pattern','light','time','day'});
+    writetable(T,r_file);
+end
 
 
-% %  Write file for analysis in R for 10005 tracks
+
+
+% %  Write file for r* analysis in R for 10005 tracks
 writeFile = true;
 if isunix
     r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_trajs_Rstudio.txt';

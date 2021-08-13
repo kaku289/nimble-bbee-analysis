@@ -531,6 +531,65 @@ classdef filteredState_BlindLandingtrack < handle
             
         end
         
+        function compute_instabilityFollows(obj, yrange)
+            % For every rref segment, checks whether instability follows
+            % within yrange after it ends.
+            % Condition for instability (V<0.05 m/s)
+            
+            vthreshold = 0.05; % in m/s
+            
+            if isempty(obj.rrefSegments)
+                return
+            end
+            
+            indx = size(obj.filteredState,1);
+%             t_all = obj.filteredState(1:indx,1)-obj.filteredState(1,1);
+            y_all = -obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+%             a_all = obj.filteredState(1:indx,9);
+%             r = v_all./y_all;
+            
+            for ct=1:length(obj.rrefSegments)
+                if isempty(obj.rrefSegments(ct).intervals_ti)
+                    continue
+                end
+                
+                rref_intervals = obj.rrefSegments(ct).intervals_ti;
+                
+                instabilityFollows = false(size(rref_intervals,1),1);
+                for ct1=1:size(rref_intervals,1)
+                    
+                    
+                    y_part = y_all(rref_intervals(ct1,2):end)-y_all(rref_intervals(ct1,2));
+                    indx = find(y_part<-yrange,1);
+                                        
+                    if isempty(indx) 
+                        continue;
+                    elseif any(v_all(rref_intervals(ct1,2):rref_intervals(ct1,2)+indx-1)<vthreshold)
+                        instabilityFollows(ct1) = true;
+                    end
+                    
+                end
+                obj.rrefSegments(ct).instabilityFollows = instabilityFollows;
+                obj.rrefSegments(ct).y_rrefEnd = arrayfun(@(x) y_all(x), rref_intervals(:,2));
+            end
+        end
+        
+        function output = hasLowV(obj, ygroups, vthreshold)
+            % find if the current track has low V (< vthreshold) within
+            % each ygroup
+            % output - logical vector of size length(ygroup)-1 by 1
+            assert(all(diff(ygroups)>0));
+            
+            y0 = 0.05; % neglecting the part when the bbee covers first 5 cm towards the platform
+            y = -obj.filteredState(:,3);
+            indx = find(y<y(1)-y0, 1, 'first');
+            
+            y = -obj.filteredState(indx:end,3);
+            v = obj.filteredState(indx:end,6);
+            
+            output = arrayfun(@(x) any(v(y>=ygroups(x) & y<ygroups(x+1))<vthreshold), 1:length(ygroups)-1);
+        end
         
         function plotHandles = plot_rrefs_with3dspeed(obj, factor)
             % Plots V vs y and V/y vs y highling change in r* within the same track

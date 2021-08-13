@@ -51,6 +51,8 @@ classdef data4rrefEstimate < handle
         dof_actual ; % Actual duration of flight
         Rsquared ;
         
+        instabilityFollows ; % N by 1 logical vector
+        y_rrefEnd; % N by 1 (y where rref segment ends)
     end
      methods
          function obj = data4rrefEstimate()
