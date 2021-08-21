@@ -173,7 +173,13 @@ keyboard;
 
 clc; close all;
 % clear;
-% 
+
+if isunix
+    inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1pt5_all.mat';
+elseif ispc
+    inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1pt5_all.mat';
+end
+
 % inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntry.mat';
 % load(inputFile);
 treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
@@ -184,7 +190,7 @@ light = {'low', 'medium', 'high'};
 behaviour = {'rising','constant','sleeping'};
 
 % factors = [0.5:0.5:2.5];
-factors = [1]; % chosen factor
+factors = [1.5]; % chosen factor
 
 data_all = struct.empty;
 
@@ -335,7 +341,9 @@ labels = cell(0, 1); % for x-axis of boxplots
     
 for ct_fac=1:length(factors)
     
-%     AICc = cell(size(nPZ,1),1);
+    AICc = cell(size(nPZ,1),1);
+%     AIC = cell(size(nPZ,1),1);
+%     BIC = cell(size(nPZ,1),1);
     fitPercent = cell(size(nPZ,1),1);
     for ct_order = 1:size(nPZ,1)
         labels{ct_order, 1} = [num2str(ct_order)];
@@ -344,14 +352,18 @@ for ct_fac=1:length(factors)
             for ct_light = 1:length(light)
                 
                 n = length(data4est_lowpass{ct_pattern, ct_light, ct_fac}.track_indexes);
-%                 AICc{ct_order, 1} = [AICc{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AICc,1:n)];
+                AICc{ct_order, 1} = [AICc{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AICc,1:n)];
+%                 AIC{ct_order, 1} = [AIC{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.AIC,1:n)];
+%                 BIC{ct_order, 1} = [BIC{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.BIC,1:n)];
                 fitPercent{ct_order, 1} = [fitPercent{ct_order, 1} arrayfun(@(x) data4est_lowpass{ct_pattern, ct_light, ct_fac}.tfest(:,:,x,ct_order).Report.Fit.FitPercent,1:n)];
             end
         end
 
     end
-%     createBoxPlot(AICc, labels, 'AICc')
-    createBoxPlot(fitPercent, labels, 'FitPercent')
+%     createBoxPlot(BIC, labels, 'BIC')
+%     createBoxPlot(AIC, labels, 'AIC')
+    createBoxPlot(AICc, labels, 'AICc')
+%     createBoxPlot(fitPercent, labels, 'FitPercent')
     title(['Factor = ' num2str(factors(ct_fac))], 'FontSize', 18);
 end
 
@@ -523,6 +535,8 @@ for ct_fac=1:length(factors)
 end
 %%
 % For each treatment with a selected model order (=2)
+chosen_fac = 1.5;
+
 model_order_indx = 2;
 labels = cell(0, 1); % for x-axis of boxplots
 pattern_label = {'+', 'x'}; % + is checkerboard, x is spokes
@@ -560,7 +574,7 @@ for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
         
         %Compute y_start for each rref entry segment
-        ystart_indx = arrayfun(@(x) x.rrefEntrySegments([x.rrefEntrySegments.factor]==1).intervals(:,1) , data_all(ct_pattern,ct_light).tracks_fac,'UniformOutput',false);
+        ystart_indx = arrayfun(@(x) x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-1.5)<1e-5).intervals(:,1) , data_all(ct_pattern,ct_light).tracks_fac,'UniformOutput',false);
         ystart_indx = vertcat(ystart_indx{:});
         ystart_entry{ct_pattern, ct_light} = arrayfun(@(x) -data_all(ct_pattern,ct_light).tracks_fac(data4est_lowpass{ct_pattern, ct_light}.track_indexes(x)).filteredState(ystart_indx(x),3) ,1:length(ystart_indx));
         % 
@@ -585,6 +599,11 @@ end
 fitParameter1_figHandle = createBoxPlot({P1{:}}', {labels{:}}', 'P1'); ylim([-Inf 1000])
 fitParameter2_figHandle = createBoxPlot({P2{:}}', {labels{:}}', 'P2'); ylim([-Inf 60])
 fitParameter3_figHandle = createBoxPlot({P3{:}}', {labels{:}}', 'P3'); ylim([-Inf 1000])
+%% 
+close all;
+fitParameter1_figHandle = createBoxPlot({gain{:}}', {labels{:}}', 'gain'); ylim([-0.1 2])
+fitParameter2_figHandle = createBoxPlot({omega{:}}', {labels{:}}', 'omega'); ylim([-Inf 60])
+fitParameter3_figHandle = createBoxPlot({zeta{:}}', {labels{:}}', 'zeta'); ylim([-0.02 0.1])
 
 %%
 gain_figHandle = createBoxPlot({gain{:}}', {labels{:}}', 'Gain'); ylim([0 2])

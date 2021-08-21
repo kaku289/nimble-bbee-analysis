@@ -995,12 +995,15 @@ classdef filteredState_BlindLandingtrack < handle
                     rresid = r_interval - [ones(length(t_interval),1) t_interval]*intercept_slope;
                     SSresid = sum(rresid.^2); SStotal = (length(r_interval)-1)*var(r_interval);
                     obj.rrefEntrySegments(ct).Rsquare_rvst(ct1,1) = 1-SSresid/SStotal;
+                    obj.rrefEntrySegments(ct).AICc1(ct1,1) = length(r_interval)*log(SSresid/length(r_interval)) + 4 + 12/(length(r_interval)-3);
+                    obj.rrefEntrySegments(ct).BIC1(ct1,1) = length(r_interval)*log(SSresid/length(r_interval)) + 2*log(length(r_interval));
                     
                     obj.rrefEntrySegments(ct).ymean_for_rdot(ct1,1) = mean(y_all((rrefEntry_interval(1):rrefEntry_interval(2))));
                     obj.rrefEntrySegments(ct).delta_r(ct1,1) = abs(diff(r_interval([1 end])));
                     obj.rrefEntrySegments(ct).delta_y_actual(ct1,1) = abs(diff(y_interval([1 end])));
                     
-                    tspan = [0 abs(diff(t_interval([1 end])))];
+%                     tspan = [0 abs(diff(t_interval([1 end])))];
+                    tspan = t_interval-t_interval(1);
                     y0 = [-y_interval(1) v_interval(1)]; rdot = -intercept_slope(2);
                     [t,y] = ode45(@(t,y) filteredState_BlindLandingtrack.const_drdt_movement(t,y,rdot), tspan, y0);
                     obj.rrefEntrySegments(ct).delta_y_analytical(ct1,1) = abs(diff(y([1 end],1)));
@@ -1025,9 +1028,55 @@ classdef filteredState_BlindLandingtrack < handle
                     
                     obj.rrefEntrySegments(ct).acc_actual{ct1,1} = a_interval;
                     obj.rrefEntrySegments(ct).acc_rdotsim{ct1,1} = asim;
+                    
+                    obj.rrefEntrySegments(ct).amean_rdotsim(ct1,1) = mean(asim);
+
+                    %%% Do 0 and 2 order fits between r and t, and find
+                    %%% AICc for them as well
+                    model0 = [ones(length(t_interval),1)]\r_interval;
+                    rresid = r_interval - [ones(length(t_interval),1)]*model0;
+                    obj.rrefEntrySegments(ct).AICc0(ct1,1) = length(r_interval)*log(sum(rresid.^2)/length(r_interval)) + 2 + 4/(length(r_interval)-2);
+                    obj.rrefEntrySegments(ct).BIC0(ct1,1) = length(r_interval)*log(sum(rresid.^2)/length(r_interval)) + 1*log(length(r_interval));
+                    
+                    model2 = [ones(length(t_interval),1) t_interval t_interval.^2]\r_interval;
+                    rresid = r_interval - [ones(length(t_interval),1) t_interval t_interval.^2]*model2;
+                    obj.rrefEntrySegments(ct).AICc2(ct1,1) = length(r_interval)*log(sum(rresid.^2)/length(r_interval)) + 6 + 24/(length(r_interval)-4);
+                    obj.rrefEntrySegments(ct).BIC2(ct1,1) = length(r_interval)*log(sum(rresid.^2)/length(r_interval)) + 3*log(length(r_interval));
+
                 end
             end
             
+        end
+        
+        function [delta_t, dist_travelled] = compute_landing_performance(obj,y1,y2)
+            % This function computes time taken by bbee to go from y1 to y2
+            % It also computes trajectory path lengrh between y1 to y2
+            
+            assert(y2<y1);
+            
+            t = obj.filteredState(:,1)-obj.filteredState(1,1);
+            y = -obj.filteredState(:,3);
+            
+            delta_t = nan;
+            % Computing delta_t
+            if y(1)>=y1
+                indx_y1 = find((y-y1)<0, 1);
+                indx_y2 = find((y-y2)<0, 1);
+                
+%                 if isempty(indx_y2)
+%                     indx_y2 = find(abs(y-y2)<1e-3, 1);
+%                 end                
+
+                if isempty(indx_y1) || isempty(indx_y2)
+                    keyboard;
+                end
+                assert(~isempty(indx_y1) & ~isempty(indx_y2));
+                assert(indx_y2>indx_y1);
+                delta_t = t(indx_y2)-t(indx_y1);                
+            end
+            
+            % Distance travelled is not implemented yet
+            dist_travelled = nan; 
         end
         
         

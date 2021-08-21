@@ -29,6 +29,13 @@ classdef data4rrefEntry < handle
         slope_rvst ; % N by 1
         const_rvst ; % N by 1
         Rsquare_rvst; % N by 1
+        AICc0; % AICc for r = const
+        AICc1; % AICc for r = m1*tt + const
+        AICc2; % AICc for r = m2*t^2 + m1*t + const
+        
+        BIC0; % BIC for r = const
+        BIC1; % BIC for r = m1*tt + const
+        BIC2; % BIC for r = m2*t^2 + m1*t + const
         
         isRise; % N y 1 (1 if the entry segment is rising, 0 if falling)
         ymean_for_rdot; % N by 1
@@ -43,6 +50,8 @@ classdef data4rrefEntry < handle
         
         acc_actual; % cell N by 1
         acc_rdotsim; % cell N by 1
+        
+        amean_rdotsim; % vector N by 1
         
     end
      methods
