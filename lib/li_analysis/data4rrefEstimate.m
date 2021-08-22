@@ -17,6 +17,8 @@ classdef data4rrefEstimate < handle
         zTravelled_ti ;
         xmean_ti ;
         zmean_ti ;
+        ymid ; % middle point between two extreme points
+        yrange; % delta y between first and second point of intervals_ti
         fd_analytical_ti ; % analytically computed flight duration 
         fd_actual_ti ; % actual flight duration
         
@@ -51,6 +53,13 @@ classdef data4rrefEstimate < handle
         dof_analytical ; % Duration of flight calculated analytically 
         dof_actual ; % Actual duration of flight
         Rsquared ;
+        
+        % For instability characterization
+        instabilityFollows ; % N by 1 logical vector
+        y_rrefEnd; % N by 1 (y where rref segment ends)
+        instability_deltat; % N by 1
+        instability_meanv; % N by 1
+        instability_indices; % N by 2 (indexes where instability started and ended)
         
     end
      methods

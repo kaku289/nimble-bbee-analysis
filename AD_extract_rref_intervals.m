@@ -196,6 +196,9 @@ for ct_wind = 1:length(winds)
             data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
             data1 = horzcat(data1{:});
             
+            % compute whether or not instability follows
+            arrayfun(@(x) x.compute_instabilityFollows2(),[treatment.landingTracks.state_LDF]);
+
             hastakeoff_pertreatment = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs)*ones(1,length(x.rrefSegments)),[treatment.landingTracks.state_LDF]','UniformOutput',false);
             hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
             % Discard empty intervals
@@ -205,7 +208,7 @@ for ct_wind = 1:length(winds)
             data1 = data1(indices);
 %             [data1.pattern] = deal(ct_pattern);
 %             [data1.light] = deal(ct_light);
-            [data1.wind] = deal(ct_wind);
+            [data1.wind] = deal(winds(ct_wind));
             [data1.day] = deal(treatment.datenum);
             [data1.time] = deal(treatment.startTime);
             
@@ -247,6 +250,13 @@ for ct_factor=1:length(factors)
     y = -vertcat(data_fac.ymean_ti);
     r = -vertcat(data_fac.rref_ti);
     v = vertcat(data_fac.vmean_ti);
+    delta_y = vertcat(data_fac.yrange);
+    delta_t = vertcat(data_fac.fd_actual_ti);
+    hasInstabilityAssociated = vertcat(data_fac.instabilityFollows);
+    y_rrefEnd = vertcat(data_fac.y_rrefEnd);
+    instability_deltat = vertcat(data_fac.instability_deltat);
+    instability_meanv = vertcat(data_fac.instability_meanv);
+    
     
     speed3d = vertcat(data_fac.speed3d_mean_ti);
 %     rSpeed3d = -vertcat(data_fac.rmean_speed3d_ti);
@@ -256,7 +266,9 @@ for ct_factor=1:length(factors)
         
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
-        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d vertcat(hasTakeoff_fac{:})];
+        vertcat(time{:}) vertcat(day{:}) y r v factor*ones(size(r,1),1) speed3d vertcat(hasTakeoff_fac{:}) ...
+        delta_y delta_t hasInstabilityAssociated y_rrefEnd ...
+        instability_deltat instability_meanv];
     
     N1 = sum(arrayfun(@(x) size(x.intervals_ti,1)>1, data_fac));
     disp(['# tracks: ' num2str(N) ', # data points: ' num2str(size(r,1)), ...
@@ -266,7 +278,9 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','threshold', 'speed3d', 'hasTakeoff'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y',...
+        'r','v','threshold', 'speed3d', 'hasTakeoff','delta_y','delta_t','hia','y_rrefEnd',...
+        'i_deltat','i_meanv'});
     writetable(T,r_file);
 end
 

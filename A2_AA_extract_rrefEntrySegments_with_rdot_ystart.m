@@ -355,18 +355,20 @@ for ct_factor=1:length(factors)
     delta_r = vertcat(data_fac.delta_r);
     
     yStart = -vertcat(data_fac.yEntryStart);
+    vStart = -vertcat(data_fac.vEntryStart);
+    rStart = -vertcat(data_fac.rEntryStart);
     delta_V = vertcat(data_fac.delta_Ventry);
     delta_t = vertcat(data_fac.delta_tentry);
     amean = vertcat(data_fac.amean_entry);
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(wind{:}) ...
-        vertcat(time{:}) vertcat(day{:}) y r rdot factor*ones(size(r,1),1) isRise delta_r vertcat(hasTakeoff_fac{:}) yStart delta_V delta_t amean];
+        vertcat(time{:}) vertcat(day{:}) y r rdot factor*ones(size(r,1),1) isRise delta_r vertcat(hasTakeoff_fac{:}) yStart vStart rStart delta_V delta_t amean];
 end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','wind','time','day','y','rref','rdot','threshold', 'isRise', 'delta_r', 'hasTakeoff', 'ystart', 'deltaV', 'deltaT', 'Amean'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','rref','rdot','threshold', 'isRise', 'delta_r', 'hasTakeoff', 'ystart', 'vstart', 'rstart', 'deltaV', 'deltaT', 'Amean'});
     writetable(T,r_file);
 end
 

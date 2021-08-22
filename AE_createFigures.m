@@ -154,16 +154,16 @@ set(gca, 'FontSize', 16);
 ylim([-0.8 0.2])
 print(fig3, fullfile(saveDir,'General_taudotvsy'), '-dpdf');
 
+
 %% Figure 2 panels
 
 clc; close all;
 % clear;
 % 
-% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref_videos.mat';
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref_rrefEntry.mat';
 % load(inputFile);
-treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
-DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_with_videos';
+DirPlots = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_with_videos';
 delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
 savePlots = false;
 savePDFs = false;
@@ -380,113 +380,141 @@ end
 clc; close all;
 % clear;
 % 
-% inputFile = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref.mat';
 % load(inputFile);
-treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
-
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
 chosen_fac = 1;
 
-data = struct.empty;
+
 % tracks_fac(length(pattern), length(light)) = filteredState_BlindLandingtrack.empty; % tracks for chosen factor
-clear dummy;
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
+clear dummy N N_fromTakeoff N_fromFreeflight N_stateLDFs;
+
+data_allfac = cell(length(factors),1);
+for ct_factor = 1:length(factors)
+    current_factor = factors(ct_factor);
+    disp(['Factor: ' num2str(current_factor)]);
+    data = struct.empty;
+    for ct_wind = 1:length(winds)
+
         for ct_behaviour = 2%1:length(behaviour)
-            disp(' ');
-            disp(['Pattern: ' pattern{ct_pattern} ...
-                  ', light: ' light{ct_light} ...
-                  ', behaviour: ' behaviour{ct_behaviour}]);
-        
-           % Selecting relevant treatments
+            
+            disp([' wind: ' num2str(winds(ct_wind)) ...
+                ', behaviour: ' behaviour{ct_behaviour}]);
+
+            % Selecting relevant treatments
             if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
+                relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
             elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
+                relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                    rem(1:length(treatments), 8)>1 & ...
+                    rem(1:length(treatments), 8)<8);
             elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
+                relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
             else
                 error('What other treatments did you perform dude?')
             end
-            
-            %%%%%%%%%%%%%% Each light and pattern combination %%%%%%%%%%%
+
+            % Only analyse treatments that have uniform wind measurements
+            % avaliable throughout their course of running
+            hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+            relevantTreatments = relevantTreatments(hasUniformHwData);
+
+            %%%%%%%%%%%%%% Each wind condition %%%%%%%%%%%
             landingTracks = [relevantTreatments.landingTracks];
             state_LDF = [landingTracks.state_LDF];
             rrefSegs = [state_LDF.rrefSegments];
-            
+
+            treatment_indx4landingTracks = arrayfun(@(x) x*ones(length(relevantTreatments(x).landingTracks),1),1:length(relevantTreatments), 'UniformOutput', false);
+            treatment_indx4landingTracks = vertcat(treatment_indx4landingTracks{:});
+            treatment_indx4stateLDF = arrayfun(@(x) treatment_indx4landingTracks(x)*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+            treatment_indx4stateLDF = vertcat(treatment_indx4stateLDF{:});
+
             landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
             landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+
             
-            % Display info about # of landing tracks
-            disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
-            disp(['# of state LDFs (landingTracks): ' num2str(length(state_LDF))]);
-%             disp(['Size of rrefSegment vector: ' num2str(length(rrefSegs))]);
-            
+
             % Finding # of "tracks" (state LDFs) that contain rref segments
             % for each factor
-            N = zeros(1, length(factors));
-            for ct_fac = 1:length(factors)
-                factor = factors(ct_fac);
-                indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).intervals_ti),state_LDF);
-                N(ct_fac) = sum(indices);
+            landingDiscs = {relevantTreatments(treatment_indx4stateLDF).landingDiscs};
+            hastakeoff = arrayfun(@(x) state_LDF(x).hasTakeoff(landingDiscs{x}),1:length(state_LDF));
+                
+            if current_factor == chosen_fac
+                % Display info about # of landing tracks
+    %         disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
+                disp(['# of state LDFs (landingTracks): ' num2str(length(state_LDF))]);
+            %             disp(['Size of rrefSegment vector: ' num2str(length(rrefSegs))]);
+            
+                N{winds(ct_wind)} = zeros(1, length(factors));
+                
+                N_stateLDFs{winds(ct_wind)} = [length(state_LDF), sum(hastakeoff), sum(~hastakeoff)];
+                N_fromTakeoff{winds(ct_wind)} = zeros(1, length(factors));
+                N_fromFreeflight{winds(ct_wind)} = zeros(1, length(factors));
+                for ct_fac = 1:length(factors)
+                    factor = factors(ct_fac);
+                    indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).intervals_ti),state_LDF);
+                    N{winds(ct_wind)}(ct_fac) = sum(indices);
+                    N_fromTakeoff{winds(ct_wind)}(ct_fac) = sum(indices & hastakeoff);
+                    N_fromFreeflight{winds(ct_wind)}(ct_fac) = sum(indices & ~hastakeoff);
+                end
+
+                % Display 
+                disp(['# of state LDFs containing rrefs for different factors: ' num2str(N{winds(ct_wind)})]);
+                disp(['# of state LDFs containing rrefs for different factors from Takeoff: ' num2str(N_fromTakeoff{winds(ct_wind)})]);
+                disp(['# of state LDFs containing rrefs for different factors from Freeflight: ' num2str(N_fromFreeflight{winds(ct_wind)})]);
             end
-            
-            % Display 
-            disp(['# of state LDFs containing rrefs for different factors: ' num2str(N)]);
-            
+
             % For chosen factor, collect all tracks that do contain
             % non-empty rref segments
-            indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti), state_LDF);
+            indices = arrayfun(@(x) ~isempty(x.rrefSegments(abs([x.rrefSegments.factor]-current_factor)<1e-6).intervals_ti), state_LDF);
             dummy.tracks_fac = state_LDF(indices);
-            dummy.ct_pattern = ct_pattern;
-            dummy.ct_light = ct_light;
+            dummy.wind = winds(ct_wind);
             dummy.landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
+            treatment_indx4stateLDF = treatment_indx4stateLDF(indices);
+    %             dummy.landingDiscs = {relevantTreatments(treatment_indx4stateLDF).landingDiscs};
+
+            dummy.hastakeoff = hastakeoff(indices); %arrayfun(@(x) dummy.tracks_fac(x).hasTakeoff(dummy.landingDiscs{x}),1:length(dummy.tracks_fac));
+            dummy.factor = current_factor;
             data = [data; dummy];
-            
-            
-%             for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
-%                 treatment = relevantTreatments(ct_treatment);
-%                 arrayfun(@(x) x.setLandingSide(),[treatment.landingTracks.state_LDF]'); % to store landing side in the rrefSegments
-%                 data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
-%                 data1 = horzcat(data1{:});
-%                 
-%                 % Discard empty intervals
-%                 indices = arrayfun(@(x) ~isempty(x.intervals_ti), data1);
-%                 
-%                 % Save additional data
-%                 data1 = data1(indices);
-%                 [data1.pattern] = deal(ct_pattern);
-%                 [data1.light] = deal(ct_light);
-%                 [data1.day] = deal(treatment.datenum);
-%                 [data1.time] = deal(treatment.startTime);
-%     
-%                 data = [data data1];
-% %                 size(data)
-% %                 keyboard;
-%             end
-            
+
+
+            %             for ct_treatment=1:length(relevantTreatments) % for each relevant treatment
+            %                 treatment = relevantTreatments(ct_treatment);
+            %                 arrayfun(@(x) x.setLandingSide(),[treatment.landingTracks.state_LDF]'); % to store landing side in the rrefSegments
+            %                 data1 = arrayfun(@(x) x.rrefSegments,[treatment.landingTracks.state_LDF]','UniformOutput',false);
+            %                 data1 = horzcat(data1{:});
+            %
+            %                 % Discard empty intervals
+            %                 indices = arrayfun(@(x) ~isempty(x.intervals_ti), data1);
+            %
+            %                 % Save additional data
+            %                 data1 = data1(indices);
+            %                 [data1.pattern] = deal(ct_pattern);
+            %                 [data1.light] = deal(ct_light);
+            %                 [data1.day] = deal(treatment.datenum);
+            %                 [data1.time] = deal(treatment.startTime);
+            %
+            %                 data = [data data1];
+            % %                 size(data)
+            % %                 keyboard;
+            %             end
+
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         end
+
     end
+    data_allfac{ct_factor} = data;
 end
-
-
+clear data;
+data = data_allfac{factors==chosen_fac};
 %% Create panels a and b for Figure 3 - Trajectories' views
 close all;
 trajPlot = figure; hold on;
-skip_step = 10;
+skip_step = 30;
 N = 0;
 for ct=1:length(data)
     for ct1 = 1:skip_step:length(data(ct).tracks_fac)
@@ -551,6 +579,9 @@ for ct=1:length(data)
     dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti,data(ct).tracks_fac,'UniformOutput',false);
     data(ct).ymean = vertcat(dummy{:});
     
+    dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).yrange,data(ct).tracks_fac,'UniformOutput',false);
+    data(ct).deltay = vertcat(dummy{:});
+    
     dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).fd_analytical_ti,data(ct).tracks_fac,'UniformOutput',false);
     data(ct).fd_analytical_ti = vertcat(dummy{:});
     
@@ -570,16 +601,60 @@ dummy = abs(vertcat(data.rref)-vertcat(data.rmean));
 dummy = abs(vertcat(data.fd_analytical_ti)-vertcat(data.fd_actual_ti));
 [mean(dummy) median(dummy) max(dummy)]
 
-figure;
-% histogram(-vertcat(data.rmean), [0:0.5:8]);
-% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
-histfit(-vertcat(data.rmean),[],'Gamma')
-xlabel('Estimated set-points, r* (1/s)', 'FontSize', 16);
-ylabel('Occurences', 'FontSize', 16);
-set(gca, 'FontSize', 16);
 dummy = -vertcat(data.rmean);
 [mean(dummy) median(dummy) max(dummy) min(dummy)]
 pd = fitdist(dummy,'Gamma');
+
+% To find bin edges for statistial testing of delta_y
+rvalues = [min(-vertcat(data.rmean)):0.01:max(-vertcat(data.rmean))];
+cum_pdf = cdf(pd,rvalues);
+
+bin_edgeindx1 = find(cum_pdf(1:end)>=0.333 & cum_pdf(1:end)<=0.34,1);
+bin_edgeindx2 = find(cum_pdf(1:end)>=0.666 & cum_pdf(1:end)<=0.67,1);
+r_edge1 = rvalues(bin_edgeindx1);
+r_edge2 = rvalues(bin_edgeindx2);
+
+figure;
+histogram(vertcat(data.deltay))
+xlabel('delta y (m)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+figure;
+% histogram(-vertcat(data.rmean), [0:0.5:8]);
+% histogram(-vertcat(data.rmean), [0:0.5:9.5]);
+bbee_histfit = histfit(-vertcat(data.rmean),[],'Gamma')
+xlabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+figure; hold on;
+bbee_hist = histogram(-vertcat(data.rmean),'Normalization','pdf');
+plot(bbee_histfit(2).XData, pdf(pd, bbee_histfit(2).XData),'color','r','Linewidth',2);
+xlabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+ylabel('Probability density (s)', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m','linewidth',3); xline(r_edge2,'g','linewidth',3);
+
+x1 = 0:0.01:r_edge1;
+% plot(h(2).XData, pdf(ptc(5), h(2).XData)*sum(h(1).YData*(diff(h(1).XData(1:2)))),'g','Linewidth',2);
+area(x1, pdf(pd,x1));
+
+x1 = r_edge1:0.01:r_edge2;
+area(x1, pdf(pd,x1));
+
+x1 = r_edge2:0.01:max(-vertcat(data.rmean));
+area(x1, pdf(pd,x1));
+
+
+figure;
+plot(rvalues, cum_pdf);
+xlabel('Estimated set-points, r* (s-1)', 'FontSize', 16);
+ylabel('Cumulative probability density', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+xline(r_edge1,'m'); xline(r_edge2,'g');
+
 
 arrayfun(@(x) length(vertcat(data(x).rmean)), 1:length(data))
 % Compute pdf for each light*pattern combination
@@ -638,6 +713,226 @@ for ct=1:length(data)
     median_rref1(ct) = median(pdf_rref(ct));
 %     median_rref2(ct) = median(-vertcat(data(ct).rmean));
 end
+
+%% Plot average approach and rref historgram for selected wind conditions
+winds = unique([data.wind]);
+assert(length(winds) == length(data));
+
+chosen_winds = [1 6]; % treatments for which plots are made
+
+close all;
+% % Collect tracks from ymax to end
+% for ct=1:length(data_all)
+%     data_all(ct).filteredStates_all = struct.empty;
+%     for ct1=1:1:length(data_all(ct).state_LDF)
+%         % y is pointing inside the platform here, therefore looking at ymin
+%         % for maximum distance away from the platform
+%         xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+%         [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+%         data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,:);
+%     end
+% end
+
+ybins = -0.4:0.005:-0.01;
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0];
+colors = colors(chosen_winds,:);
+
+ic = {'free-flight','take-off'}; % initial condition
+ic_hasTakeoff = [false, true];
+
+ystarmean = 0.185; % mean y* from R at which rref histogram is plotted
+
+for ct_ic = 1:length(ic)
+    fig1 = figure; % average approach towards the landing surface
+    fig2 = figure; % rref and velocity histograms
+    legendString = {};
+    for ct_wind=1:length(chosen_winds)
+        wind = chosen_winds(ct_wind);
+        legendString{end+1} = num2str(wind);
+        
+        data_ss = data([data.wind] == wind);
+        tracks = data_ss.tracks_fac(data_ss.hastakeoff == ic_hasTakeoff(ct_ic));
+        
+        dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).rmean_ti, tracks,'UniformOutput',false);
+        rmean = vertcat(dummy{:});
+
+        dummy = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).ymean_ti, tracks,'UniformOutput',false);
+        ymean = vertcat(dummy{:});
+        
+        rmean = -rmean(-ymean>=ystarmean-0.01 & -ymean<=ystarmean+1);
+        
+        data_xyzuvw = arrayfun(@(x) x.filteredState(x.filteredState(:,3)>=ybins(1) & x.filteredState(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+        data_xyzuvw = vertcat(data_xyzuvw{:});
+        xyzuvw = [];
+        y = [];
+        sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+        r = [];
+        sem_r = [];
+        for ct=1:length(ybins)-1
+            dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+            y = [y; mean(ybins(ct:ct+1))];
+            xyzuvw = [xyzuvw; mean(dummy)];
+            r = [r; mean(dummy(:,5)./dummy(:,2))];
+            sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+            %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+            sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+            %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+        end
+        
+        
+        
+        figure(fig1);
+        subplot(2,1,1); hold on;
+        fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+                
+        subplot(2,1,2); hold on;
+        a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+        
+        figure(fig2);
+        subplot(1,2,1);
+        histogram(rmean,'facecolor',colors(ct_wind,:),'facealpha',.5,'edgecolor','none','normalization','pdf');
+        hold on;
+        
+        subplot(1,2,2);
+        v = data_xyzuvw(-data_xyzuvw(:,2)>=ystarmean-0.01 & -data_xyzuvw(:,2)<=ystarmean+0.01,5);
+        histogram(v,'facecolor',colors(ct_wind,:),'facealpha',.5,'edgecolor','none','normalization','pdf');
+        hold on;
+        
+        disp(['wind: ' num2str(wind) ', ic: ' ic{ct_ic}]);
+%         disp(num2str(quantile(-rmean,[0.25, 0.5, 0.75])));
+        disp(num2str(quantile(rmean,[0.5])));
+%         disp(num2str(mean(rmean)));
+        
+    end
+
+    figure(fig1);
+    subplot(2,1,1);
+    ylabel('V (m s-1)', 'FontSize', 16);
+    title(ic{ct_ic}, 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+%     if ct_ic == 1
+%         ylim([0 0.3]);
+%         yticks([0:0.1:0.3]);
+%     elseif ct_ic == 2
+%         ylim([0 0.5]);
+%         yticks([0:0.1:0.5]);
+%     end
+
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+    
+    subplot(2,1,2);
+    ylabel('r (s-1)', 'FontSize', 16);
+    xlabel('y (m)', 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    ylim([0 6]);
+    yticks([0:2:6]);
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+    legend(legendString);
+    
+    figure(fig2);
+    subplot(1,2,1);
+    ylabel('pdf', 'FontSize', 16);
+    xlabel('r*', 'FontSize', 16);
+    title(ic{ct_ic}, 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    
+    subplot(1,2,2);
+    xlabel('V (m s-1)', 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    legend(legendString);
+%     legend(arrayfun(@(x) num2str(x),winds,'UniformOutput',false));
+end
+
+%% Compare vmean for r*, rest and (r*+rest) at mean y* = 0.185
+ystarmean = 0.185;
+yinterval = [ystarmean-0.005 ystarmean+0.005]; % y interval for which data will be extracted
+
+data_write = cell(length(data_allfac),1);
+for ct_fac=1:length(data_allfac)
+    data_fac = data_allfac{ct_fac};
+    factor = data_fac.factor;
+    disp(['Factor: ' num2str(factor)]);
+    approach = 0;
+    dummy = []; % to store data
+    for ct=1:length(data_fac)
+        disp([' wind: ' num2str(data_fac(ct).wind)]);
+        
+        tracks = data_fac(ct).tracks_fac;
+        indx4tracks = arrayfun(@(x) x*ones(length(tracks(x).rrefSegments(abs([tracks(x).rrefSegments.factor]-factor)<1e-6).rref_ti),1), 1:length(tracks),'uniformoutput',false);
+        indx4tracks = vertcat(indx4tracks{:});
+        hastakeoff = data_fac(ct).hastakeoff;
+        landingTrack = data_fac(ct).landingTrack;
+        
+        
+        rrefSegments = arrayfun(@(x) x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6), tracks);
+        ymid = -vertcat(rrefSegments.ymid);
+        yrange = vertcat(rrefSegments.yrange);
+        ynear = ymid-yrange./2; yfar = ymid+yrange/2;
+        
+        has_rref_in_yinterval = ynear<=yinterval(1) & yinterval(2)<=yfar; % segments that contain rref in y interval
+        tracks_with_rref_in_yinterval = indx4tracks(has_rref_in_yinterval); % segments that contain rref in y interval
+        
+        has_ystar_in_yinterval = ymid>=yinterval(1) & yinterval(2)>=ymid; % segments that contain ystar in y interval
+        tracks_with_ystar_in_yinterval = indx4tracks(has_ystar_in_yinterval); % segments that contain rref in y interval
+        
+        for ct1=1:length(tracks) % for each track
+            % [f wind hastakeoff V approach
+            % landingside day hasrref]
+            arrayfun(@(x) x.setLandingSide(),tracks(ct1)); % to store landing side in the rrefSegments
+            
+            approach = approach + 1;
+            side = tracks(ct1).rrefSegments(abs([tracks(ct1).rrefSegments.factor]-factor)<1e-6).side;
+            
+            y = -tracks(ct1).filteredState(:,3);
+            indices_y_in_yinterval = find(y>=yinterval(1) & y<=yinterval(2));
+            rref_intervals = tracks(ct1).rrefSegments(abs([tracks(ct1).rrefSegments.factor]-factor)<1e-6).intervals_ti;
+            
+            v = tracks(ct1).filteredState(y>=yinterval(1) & y<=yinterval(2),6);
+            y_in_yinterval = y(y>=yinterval(1) & y<=yinterval(2));
+            N = length(v);
+            
+            if ~isempty(rref_intervals)
+                indices_rref = arrayfun(@(x) rref_intervals(x,1):rref_intervals(x,2),1:size(rref_intervals,1),'UniformOutput',false);
+                indices_rref = [indices_rref{:}];
+                hasrref = ismember(indices_y_in_yinterval, indices_rref);
+            else
+                hasrref = false(N,1);
+            end
+            
+%             hasrref_in_yinterval = ismember(ct1,tracks_with_rref_in_yinterval);
+%             hasystar_in_yinterval = ismember(ct1,tracks_with_ystar_in_yinterval);
+            
+            
+            dummy = [dummy; ...
+                          factor*ones(N,1) data_fac(ct).wind*ones(N,1) hastakeoff(ct1)*ones(N,1) ...
+                          v y_in_yinterval v./y_in_yinterval approach*ones(N,1) side*ones(N,1) ...
+                          landingTrack(ct1).datenum*ones(N,1)  hasrref];%...
+%                           hasrref_in_yinterval*ones(N,1) hasystar_in_yinterval*ones(N,1)];
+                          
+        end
+        
+    end  
+    data_write{ct_fac} = dummy;
+end
+data_write = vertcat(data_write{:});
+% Write file for statistical analysis in R
+% This file contains data for all the factors
+% clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_v_rref_nonrref_Rstudio.txt';
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'threshold','wind','hasTakeoff','v','y','r'...
+                         'approach','landingSide','day','hasrref'});%'hasrref_in_yinterval','hasystar_in_yinterval'});
+    writetable(T,r_file);
+end
+
 
 %% Panel d for Figure 3 (delta y1* and delta y2*)
 close all; clc;
@@ -985,6 +1280,117 @@ clc;
 
 [mean(vertcat(dy_mr{:})), mean(vertcat(dY_mr{:})), mean(vertcat(dy_mr{:}))/mean(vertcat(dY_mr{:}))]
 [std(vertcat(dy_mr{:})), std(vertcat(dY_mr{:})), std(vertcat(dy_mr{:}))/mean(vertcat(dY_mr{:}))]
+
+%% Extract data for statistical analysis during transition
+% only for tracks containing >1 r* segments
+data_write = [];
+for ct_fac=1:length(data_allfac)
+    data_fac = data_allfac{ct_fac};
+    factor = data_fac.factor;
+    disp(['Factor: ' num2str(factor)]);
+    approach = 0;
+    for ct=1:length(data_fac)
+        disp([' wind: ' num2str(data_fac(ct).wind)]);
+        
+        has_multiple_rrefs = arrayfun(@(x) length(x.rrefSegments(abs([x.rrefSegments.factor]-factor)<1e-6).rref_ti)>1,data_fac(ct).tracks_fac);
+        N = sum(has_multiple_rrefs);
+        data_ss = data_fac(ct).tracks_fac(has_multiple_rrefs);
+        hastakeoff = data_fac(ct).hastakeoff(has_multiple_rrefs);
+        landingTrack = data_fac(ct).landingTrack(has_multiple_rrefs);
+        
+        for ct1=1:N % for each track
+            approach = approach + 1;
+            rmean = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).rmean_ti;
+            ymean = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).ymean_ti;
+            side = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).side;
+            intervals = data_ss(ct1).rrefSegments(abs([data_ss(ct1).rrefSegments.factor]-factor)<1e-6).intervals_ti;
+            
+            [y_r, indices] = sortrows([-ymean -rmean ],1,'descend');
+            intervals = intervals(indices,:);
+            
+            % for each transition: save following:
+            % [f wind hastakeoff y* r* deltar* deltat deltay Vmean approach
+            % landingside day hasLowV]
+            for ct2=1:length(rmean)-1 % for each transition
+                deltat_y = diff(data_ss(ct1).filteredState([intervals(ct2,2) intervals(ct2+1,1)],[1 3]));
+                Vmean = mean(data_ss(ct1).filteredState(intervals(ct2,2):intervals(ct2+1,1),6));
+                hasLowV = any(data_ss(ct1).filteredState(intervals(ct2,2):intervals(ct2+1,1),6) < 0.05);
+%                 if isnan(Vmean)
+%                     % The nan Vmeans correspond to bbees flying backwards
+%                     % in between two rref segments
+%                     keyboard;
+%                 end
+                data_write = [data_write;
+                              factor data_fac(ct).wind hastakeoff(ct1) ...
+                              y_r(ct2,1) y_r(ct2,2) y_r(ct2+1,2)-y_r(ct2,2) ...
+                              deltat_y Vmean ...
+                              approach side landingTrack(ct1).datenum hasLowV];
+            end
+        end
+    end  
+    
+end
+
+% Write file for statistical analysis in R
+% This file contains data for all the factors
+% clc;
+writeFile = true;
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_rref_transition_Rstudio.txt';
+
+if writeFile
+    T = array2table(data_write, ...
+        'VariableNames',{'threshold','wind','hasTakeoff','y','r','deltar',...
+                         'deltat','deltay','vmean','approach','landingSide','day','hasLowV'});
+    writetable(T,r_file);
+end
+
+% For checks (comment later)
+T = readtable(r_file);
+data_write = table2array(T);
+data_ss = data_write(data_write(:,1)==1,:);
+for ct=1:length(winds)
+    wind = winds(ct);
+    N_lowV_takeoff(ct) = sum(data_ss(data_ss(:,2) == wind & data_ss(:,3) == 1,end));
+    N_lowV_freeflight(ct) = sum(data_ss(data_ss(:,2) == wind & data_ss(:,3) == 0,end));
+    N_takeoff(ct) = sum(data_ss(:,2) == wind & data_ss(:,3) == 1);
+    N_freeflight(ct) = sum(data_ss(:,2) == wind & data_ss(:,3) == 0);
+end
+figure;
+tiledlayout(2,2);
+
+nexttile
+bar(winds,N_takeoff);
+title('# of transitions from takeoff');
+
+nexttile
+bar(winds,N_freeflight);
+title('# of transitions from free-flight');
+
+nexttile
+bar(winds,N_lowV_takeoff);
+title('.. from take-off with low V');
+
+nexttile
+bar(winds,N_lowV_freeflight);
+title('.. from free-flight with low V');
+
+
+figure;
+title('% of transitions with low V for landings from takeoff');
+
+tiledlayout(1,2);
+
+nexttile
+bar(winds,N_lowV_takeoff./N_takeoff*100);
+title('% of transitions with low V for landings from takeoff');
+
+nexttile
+bar(winds,N_lowV_freeflight./N_freeflight*100);
+title('% of transitions with low V for landings from free-flight');
+
+
+length(unique(data_ss(isnan(data_ss(:,9)),10)))
+data_ss(isnan(data_ss(:,9)),[10 2])
 %% Panel d for Figure 4 (ymean vs rref) for each light*pattern combination
 % plotted only for tracks containing >1 r* segments
 close all; clc;

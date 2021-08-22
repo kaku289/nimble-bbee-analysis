@@ -1,6 +1,5 @@
 %% Plotting trajectories and mean approach for ALL tracks
 %
-
 % Extract all approaches
 close all; clc;
 % clear;
@@ -31,7 +30,7 @@ addpath('./lib/hline_vline');
 
 %%
 inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
-inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLanding_and_aborted_tracks_A3_LDF.mat';
+% inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLanding_and_aborted_tracks_A3_LDF.mat';
 % load(inputFile);
 
 winds = unique([treatments.wind]);
@@ -39,8 +38,13 @@ behaviour = {'rising','constant','sleeping'};
 data_all = struct.empty;
 
 Nperday = zeros(length(winds),1); % no. of state LDFs per day in different winds
-Nperday_aborted = zeros(length(winds),1); % no. of aborted state LDFs per day in different winds
+% Nperday_aborted = zeros(length(winds),1); % no. of aborted state LDFs per day in different winds
 NrelevantTreatments = zeros(length(winds),1);
+N_Ntakeoff_Nfreeflight_wind_time_day = []; % For statistical analysis (# of landing approaches with wind, time of the day and day of the experiment)
+
+ygroups = 0.05:0.05:0.25; % y groups for instability checks
+vthreshold = 0.05; % in m/s
+data_instability = []; % [hasLowV ygroupnumber hasTakeoff wind approach landingSide day time]
 for ct_wind = 1:length(winds)
         for ct_behaviour = 2%1:length(behaviour)
             clear dummy;
@@ -69,8 +73,14 @@ for ct_wind = 1:length(winds)
             hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
             relevantTreatments = relevantTreatments(hasUniformHwData);
             
+%             for ct=1:length(relevantTreatments)
+%                 treatment = relevantTreatments(ct);
+%                 N_wind_time_day = [N_wind_time_day;
+%                                    length([treatment.landingTracks.state_LDF]) treatment.wind treatment.startTime treatment.datenum];
+%             end
+            
             landingTracks = [relevantTreatments.landingTracks];
-            abortedLandingTracks = [relevantTreatments.abortedLandingTracks];
+%             abortedLandingTracks = [relevantTreatments.abortedLandingTracks];
             
             startTimes = arrayfun(@(x) (x.startTime)*ones(length([x.landingTracks.state_LDF]), 1), ...
                 relevantTreatments, 'UniformOutput', false);
@@ -81,27 +91,65 @@ for ct_wind = 1:length(winds)
             days = vertcat(days{:});
             
             % # of landing tracks
-            disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
+%             disp(['# of distinct Flydra objects (landingTracks): ' num2str(length(landingTracks))]);
             
             % # of distinct state LDFs
             disp(['# of distinct state LDFs: ' num2str(length([landingTracks.state_LDF]))]);
             
+            hastakeoff_pertreatment = cell(0,1);
+            approach = 0;
+            for ct_treatment = 1:length(relevantTreatments)
+                treatment = relevantTreatments(ct_treatment);
+                hastakeoff_pertreatment{ct_treatment} = arrayfun(@(x) x.hasTakeoff(treatment.landingDiscs),[treatment.landingTracks.state_LDF]);
+                N_Ntakeoff_Nfreeflight_wind_time_day = [N_Ntakeoff_Nfreeflight_wind_time_day;
+                                   length([treatment.landingTracks.state_LDF]) sum(hastakeoff_pertreatment{ct_treatment}) sum(~hastakeoff_pertreatment{ct_treatment}) ...
+                                   treatment.wind treatment.startTime treatment.datenum];
+                               
+                
+                % For instability
+                stateLDF = [treatment.landingTracks.state_LDF];
+                hasLowV = arrayfun(@(x) x.hasLowV(ygroups, vthreshold), stateLDF, 'UniformOutput', false);
+                hasLowV = vertcat(hasLowV{:});
+                ygroupnumber = repmat(1:4, size(hasLowV,1), 1);
+                hastakeoff = repmat(hastakeoff_pertreatment{ct_treatment}', 1, 4);
+                approach_mat = repmat([approach+1:approach+length(stateLDF)]', 1, 4);
+                
+                side = {stateLDF.landingSide};
+                isHive = cellfun(@(x) strcmpi(x,'hive'), side);
+                side_mat = ones(length(stateLDF),1); side_mat(~isHive) = 2;
+                side_mat = repmat(side_mat, 1, 4);
+
+                %  % [hasLowV ygroupnumber hasTakeoff wind approach landingSide day time]
+                data_instability = [data_instability;
+                                    hasLowV(:) ygroupnumber(:) hastakeoff(:) treatment.wind*ones(numel(hasLowV),1) ...
+                                    approach_mat(:) side_mat(:) treatment.datenum*ones(numel(hasLowV),1) ...
+                                    treatment.startTime*ones(numel(hasLowV),1)];
+                approach = approach + length(stateLDF);
+            end
+            hastakeoff_pertreatment = horzcat(hastakeoff_pertreatment{:});
             
             dummy.state_LDF = [landingTracks.state_LDF];
-%             dummy.pattern = (ct_pattern)*ones(1, length(dummy.state_LDF));
-%             dummy.light = (ct_light)*ones(1, length(dummy.state_LDF));
-            dummy.wind = (ct_wind)*ones(1, length(dummy.state_LDF));
+            dummy.wind = winds(ct_wind)*ones(1, length(dummy.state_LDF));
             dummy.day = days';
             dummy.time = startTimes';
+            dummy.hastakeoff_pertreatment = hastakeoff_pertreatment;
             
             data_all = [data_all; dummy];
             
             Nperday(ct_wind) = length([landingTracks.state_LDF]);
-            Nperday_aborted(ct_wind) = length([abortedLandingTracks.state_LDF]);
-            NrelevantTreatments = length(relevantTreatments);
+%             Nperday_aborted(ct_wind) = length([abortedLandingTracks.state_LDF]);
+            NrelevantTreatments(ct_wind) = length(relevantTreatments);
         end
 
 end
+
+
+clear dummy;
+for ct=1:length(winds)
+    dummy = N_Ntakeoff_Nfreeflight_wind_time_day(N_Ntakeoff_Nfreeflight_wind_time_day(:,4)==winds(ct),:);
+    disp(['wind: ' num2str(winds(ct)) ', # of tracks: ' num2str(sum(dummy(:,1))) ' [ ' num2str(sum(dummy(:,2))) ' ' num2str(sum(dummy(:,3))) ' ]'])
+end
+close all;
 % keyboard;
 figure;
 % subplot(2,1,1);
@@ -110,22 +158,87 @@ ylabel('Avg. no. of landings per day', 'FontSize', 14);
 xlabel('Wind conditions', 'FontSize', 14);
 set(gca, 'FontSize', 16);
 ylim([0 500]);
-figure;
-% subplot(2,1,2);
-bar(winds, Nperday_aborted./NrelevantTreatments);
-ylabel('Avg. no. of aborted landings per day', 'FontSize', 14);
-xlabel('Wind conditions', 'FontSize', 14);
-set(gca, 'FontSize', 16);
-ylim([0 500]);
-figure;
-bar(winds, (Nperday_aborted)./(Nperday_aborted+Nperday)*100);
-ylabel('Avg. % of aborted landings per day', 'FontSize', 14);
-xlabel('Wind conditions', 'FontSize', 14);
-set(gca, 'FontSize', 16);
+% figure;
+% % subplot(2,1,2);
+% bar(winds, Nperday_aborted./NrelevantTreatments);
+% ylabel('Avg. no. of aborted landings per day', 'FontSize', 14);
+% xlabel('Wind conditions', 'FontSize', 14);
+% set(gca, 'FontSize', 16);
+% ylim([0 500]);
+% figure;
+% bar(winds, (Nperday_aborted)./(Nperday_aborted+Nperday)*100);
+% ylabel('Avg. % of aborted landings per day', 'FontSize', 14);
+% xlabel('Wind conditions', 'FontSize', 14);
+% set(gca, 'FontSize', 16);
 
-% %  Write file for analysis in R for 10005 tracks
-writeFile = false;
-r_file = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/data_all_trajs_Rstudio.txt';
+
+
+% % Compute averages of starting velocities for landings with take-off and free-flight
+y_start = cell(length(data_all),1);
+V_start = cell(length(data_all),1);
+V3d_start = cell(length(data_all),1);
+for ct=1:length(data_all)
+    for ct1=1:length(data_all(ct).state_LDF)
+        
+        [y_start{ct}(ct1,1), ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        V_start{ct}(ct1,1) = data_all(ct).state_LDF(ct1).filteredState(ymin_indx,6);
+        V3d_start{ct}(ct1,1) = (sum(data_all(ct).state_LDF(ct1).filteredState(ymin_indx,5:7).^2))^0.5;
+    end
+end
+
+V3d = vertcat(V3d_start{:});
+V = vertcat(V_start{:});
+
+V3d_freeFlight = V3d(~[data_all.hastakeoff_pertreatment]);
+V3d_takeOff = V3d([data_all.hastakeoff_pertreatment]);
+[mean(V3d_freeFlight) std(V3d_freeFlight)]
+[mean(V3d_takeOff) std(V3d_takeOff)]
+
+[sum([data_all.hastakeoff_pertreatment]) sum(~[[data_all.hastakeoff_pertreatment]])]
+quantile(V3d_freeFlight,[0.25, 0.5, 0.75])
+quantile(V3d_takeOff,[0.25, 0.5, 0.75])
+
+
+% close all;
+map = brewermap(3,'Set1'); 
+figure;
+histogram(V3d([data_all.hastakeoff_pertreatment]),'facecolor',map(2,:),'facealpha',.5,'edgecolor','none');
+hold on;
+histogram(V3d(~[data_all.hastakeoff_pertreatment]),'facecolor',map(3,:),'facealpha',.5,'edgecolor','none');
+legend('From take-off','From free-flight','fontsize',16)
+xlabel('V3d_0 (m/s)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+axis tight
+xlim([0 2])
+
+[sum([data_all.hastakeoff_pertreatment]) sum(~[[data_all.hastakeoff_pertreatment]])]
+
+
+
+%% Write file for hasLowV (in R)
+writeFile = true;
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_hasLowV_Rstudio.txt';
+if writeFile
+    % [hasLowV ygroupnumber hasTakeoff wind approach landingSide day time]
+    T = array2table(data_instability, ...
+        'VariableNames',{'hasLowV','ygroupnumber','hasTakeoff','wind','approach','landingSide','day','time'});
+    writetable(T,r_file);
+end
+
+% Write file for N_track analysis in R
+writeFile = true;
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_Ntracks_perTreatment_Rstudio.txt';
+if writeFile
+    T = array2table(N_Ntakeoff_Nfreeflight_wind_time_day, ...
+        'VariableNames',{'N','Ntakeoff','Nfreeflight','wind','time','day'});
+    writetable(T,r_file);
+end
+
+
+% %  Write file for analysis in R for 19421 tracks
+writeFile = true;
+r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_all_trajs_Rstudio.txt';
 data_write = [];
 approach_no = 0;
 yrange = [-0.12 -0.02];
@@ -156,18 +269,17 @@ if writeFile
                 side = 2*ones(N, 1);
             end
 
-            pattern = data_all(ct).pattern(ct1)*ones(N, 1);
-            light = data_all(ct).light(ct1)*ones(N, 1);
+            wind = data_all(ct).wind(ct1)*ones(N, 1);
             time = data_all(ct).time(ct1)*ones(N, 1);
             day = data_all(ct).day(ct1)*ones(N, 1);
-
+            hastakeoff = data_all(ct).hastakeoff_pertreatment(ct1)*ones(N, 1);
 
 
             %     logy = log(y);
             %     logr = log(V);
 
             data_write = [data_write; ...
-                approach side pattern light time day y r v];
+                approach side wind time day y r v hastakeoff];
 
         end
     end
@@ -175,7 +287,7 @@ end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','r','v'});
+        'VariableNames',{'approach','landingSide','wind','time','day','y','r','v','hasTakeoff'});
     writetable(T,r_file);
 end
 
@@ -185,7 +297,7 @@ close all;
 
 % Plot all individual tracks (every 70th track)
 % Find Vrange
-skip_step = 150;
+skip_step = 70;
 Vrange = [];
 for ct=1:length(data_all)
     for ct1=1:skip_step:length(data_all(ct).state_LDF)
@@ -401,6 +513,7 @@ plot(-y, xyzuvw(:,4)./-y, 'k')
 
 
 %% %%%%%%%%%%% Plot average approach for different wind conditions
+%%% No distinction between landings from free-flight and take-off
 close all;
 ybins = -0.4:0.005:-0.01;
 
@@ -475,3 +588,198 @@ xlabel('y (m)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
 xline(0.04); xline(0.11);
 legend(arrayfun(@(x) num2str(x),winds,'UniformOutput',false));
+
+
+%% %%%%%%%%%%% Plot average approach for different wind conditions
+%%% Now separately for landings from free-flight and take-off
+close all;
+% Collect tracks from ymax to end
+for ct=1:length(data_all)
+    data_all(ct).filteredStates_all = struct.empty;
+    for ct1=1:1:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+        [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,:);
+    end
+end
+
+ybins = -0.4:0.005:-0.01;
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0];
+
+% fig1 = figure; hold on;
+winds = unique([data_all.wind]);
+yrange = [0.02 0.12];
+
+ic = {'free-flight','take-off'}; % initial condition
+ic_hasTakeoff = [false, true];
+
+for ct_ic = 1:length(ic)
+    fig1 = figure;
+    legendString = {};
+    for ct_wind=1:length(data_all)
+        legendString{end+1} = num2str(winds(ct_wind));
+        tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).wind == ct_wind & data_all(x).hastakeoff_pertreatment == ic_hasTakeoff(ct_ic)),1:length(data_all), 'UniformOutput', false);
+        tracks = [tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
+        data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+        data_xyzuvw = vertcat(data_xyzuvw{:});
+        xyzuvw = [];
+        y = [];
+        sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+        r = [];
+        sem_r = [];
+        for ct=1:length(ybins)-1
+            dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+            y = [y; mean(ybins(ct:ct+1))];
+            xyzuvw = [xyzuvw; mean(dummy)];
+            r = [r; mean(dummy(:,5)./dummy(:,2))];
+            sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+            %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+            sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+            %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+        end
+        
+        
+        
+        
+        subplot(2,1,1); hold on;
+        fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+                
+        subplot(2,1,2); hold on;
+        a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+        
+        
+        
+    end
+
+    figure(fig1);
+    subplot(2,1,1);
+    ylabel('V (m s-1)', 'FontSize', 16);
+    title(ic{ct_ic}, 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+%     if ct_ic == 1
+%         ylim([0 0.3]);
+%         yticks([0:0.1:0.3]);
+%     elseif ct_ic == 2
+%         ylim([0 0.5]);
+%         yticks([0:0.1:0.5]);
+%     end
+
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+    
+    subplot(2,1,2);
+    ylabel('r (s-1)', 'FontSize', 16);
+    xlabel('y (m)', 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    ylim([0 6]);
+    yticks([0:2:6]);
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+%     legend(legendString);
+    
+    legend(arrayfun(@(x) num2str(x),winds,'UniformOutput',false));
+end
+
+%% %%%%%%%%%%% Plot average approach for different wind conditions
+%%% separately for landings from free-flight and take-off
+%%% Now, average for positive and negative velocities is plotted separately
+% Manually change > sign in data_xyzuvw(:,5)>0 for that plot 
+
+close all;
+% Collect tracks from ymax to end
+for ct=1:length(data_all)
+    data_all(ct).filteredStates_all = struct.empty;
+    for ct1=1:1:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+        [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,:);
+    end
+end
+
+ybins = -0.4:0.005:-0.01;
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0];
+
+% fig1 = figure; hold on;
+winds = unique([data_all.wind]);
+yrange = [0.02 0.12];
+
+ic = {'free-flight','take-off'}; % initial condition
+ic_hasTakeoff = [false, true];
+
+for ct_ic = 1:length(ic)
+    fig1 = figure;
+    legendString = {};
+    for ct_wind=1:length(data_all)
+        legendString{end+1} = num2str(winds(ct_wind));
+        tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).wind == ct_wind & data_all(x).hastakeoff_pertreatment == ic_hasTakeoff(ct_ic)),1:length(data_all), 'UniformOutput', false);
+        tracks = [tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
+        data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+        data_xyzuvw = vertcat(data_xyzuvw{:});
+        
+        xyzuvw = [];
+        y = [];
+        sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+        r = [];
+        sem_r = [];
+        for ct=1:length(ybins)-1
+            dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1) & data_xyzuvw(:,5)<0.05, [1 2 3 4 5 6]);
+            y = [y; mean(ybins(ct:ct+1))];
+            xyzuvw = [xyzuvw; mean(dummy)];
+            r = [r; mean(dummy(:,5)./dummy(:,2))];
+            sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+            %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+            sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+            %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+        end
+        
+        
+        
+        
+        subplot(2,1,1); hold on;
+        fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+                
+        subplot(2,1,2); hold on;
+        a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+        
+        
+        
+    end
+
+    figure(fig1);
+    subplot(2,1,1);
+    ylabel('V (m s-1)', 'FontSize', 16);
+    title(ic{ct_ic}, 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+%     if ct_ic == 1
+%         ylim([0 0.3]);
+%         yticks([0:0.1:0.3]);
+%     elseif ct_ic == 2
+%         ylim([0 0.5]);
+%         yticks([0:0.1:0.5]);
+%     end
+
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+    
+    subplot(2,1,2);
+    ylabel('r (s-1)', 'FontSize', 16);
+    xlabel('y (m)', 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    ylim([0 6]);
+    yticks([0:2:6]);
+    xlim([0 0.32]);
+    xline(0.04); xline(0.11);
+%     legend(legendString);
+    
+    legend(arrayfun(@(x) num2str(x),winds,'UniformOutput',false));
+end

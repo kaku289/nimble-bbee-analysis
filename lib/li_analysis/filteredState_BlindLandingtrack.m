@@ -238,6 +238,8 @@ classdef filteredState_BlindLandingtrack < handle
                     obj.rrefSegments(ct_factor).zTravelled_ti = arrayfun(@(i,j) abs(max(z_all(i:j)) - min(z_all(i:j))), intervals_ti(:,1), intervals_ti(:,2)) ;
                     obj.rrefSegments(ct_factor).xmean_ti = arrayfun(@(i,j) mean(x_all(i:j)), intervals_ti(:,1), intervals_ti(:,2)) ;
                     obj.rrefSegments(ct_factor).zmean_ti = arrayfun(@(i,j) mean(z_all(i:j)), intervals_ti(:,1), intervals_ti(:,2)) ;
+                    obj.rrefSegments(ct_factor).yrange = arrayfun(@(i,j) abs(y_all(i) - y_all(j)), intervals_ti(:,1), intervals_ti(:,2)) ;
+                    obj.rrefSegments(ct_factor).ymid = arrayfun(@(i,j) y_all(i) + abs(y_all(i) - y_all(j))/2, intervals_ti(:,1), intervals_ti(:,2)) ;
                     obj.rrefSegments(ct_factor).fd_analytical_ti = arrayfun(@(i,j) log(abs(y_all(j)/y_all(i))), intervals_ti(:,1), intervals_ti(:,2))./obj.rrefSegments(ct_factor).rref_ti; % analytically computed flight duration 
                     obj.rrefSegments(ct_factor).fd_actual_ti = arrayfun(@(i,j) diff(t_all([i j])), intervals_ti(:,1), intervals_ti(:,2)); % actual flight duration
                     
@@ -1017,11 +1019,276 @@ classdef filteredState_BlindLandingtrack < handle
                     end
                     
                     obj.rrefEntrySegments(ct).yEntryStart(ct1,1) = y_interval(1);
+                    obj.rrefEntrySegments(ct).vEntryStart(ct1,1) = v_interval(1);
+                    obj.rrefEntrySegments(ct).rEntryStart(ct1,1) = r_interval(1);
                     obj.rrefEntrySegments(ct).delta_Ventry(ct1,1) = diff(v_interval([1 end]));
                     obj.rrefEntrySegments(ct).delta_tentry(ct1,1) = diff(t_interval([1 end]));
                     obj.rrefEntrySegments(ct).amean_entry(ct1,1) = mean(a_interval);
                 end
             end
+            
+        end
+        
+        function [delta_t, dist_travelled] = compute_landing_performance(obj,y1,y2)
+            % This function computes time taken by bbee to go from y1 to y2
+            % It also computes trajectory path lengrh between y1 to y2
+            
+            assert(y2<y1);
+            
+            t = obj.filteredState(:,1)-obj.filteredState(1,1);
+            y = -obj.filteredState(:,3);
+            
+            delta_t = nan;
+            % Computing delta_t
+            if y(1)>=y1
+                indx_y1 = find((y-y1)<0, 1);
+                indx_y2 = find((y-y2)<0, 1);
+                
+%                 if isempty(indx_y2)
+%                     indx_y2 = find(abs(y-y2)<1e-3, 1);
+%                 end                
+
+                if isempty(indx_y1) || isempty(indx_y2)
+                    keyboard;
+                end
+                assert(~isempty(indx_y1) & ~isempty(indx_y2));
+                assert(indx_y2>indx_y1);
+                delta_t = t(indx_y2)-t(indx_y1);                
+            end
+            
+            % Distance travelled is not implemented yet
+            dist_travelled = nan; 
+        end
+        
+        function compute_instabilityFollows(obj, yrange)
+            % For every rref segment, checks whether instability follows
+            % within yrange after it ends. (Method 1)
+            % Condition for instability (V<0.05 m/s)
+            
+            vthreshold = 0.05; % in m/s
+            
+            if isempty(obj.rrefSegments)
+                return
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(1,1);
+            y_all = -obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+%             a_all = obj.filteredState(1:indx,9);
+%             r = v_all./y_all;
+            
+            for ct=1:length(obj.rrefSegments)
+                if isempty(obj.rrefSegments(ct).intervals_ti)
+                    continue
+                end
+                rref_intervals = obj.rrefSegments(ct).intervals_ti;
+                
+%                 try
+%                 dum = diff(rref_intervals);
+%                 assert(all(dum(:)>0));
+%                 catch
+%                     keyboard
+%                 end
+%               Conclusion: rref segments are saved in increasing order of
+%               indices i.e., time!
+                
+                instabilityFollows = false(size(rref_intervals,1),1);
+                instability_indices = nan(size(rref_intervals,1),2);
+                instability_deltat = nan(size(rref_intervals,1),1);
+                instability_meanv = nan(size(rref_intervals,1),1);
+                for ct1=1:size(rref_intervals,1)
+                    
+                    
+                    y_part = y_all(rref_intervals(ct1,2):end)-y_all(rref_intervals(ct1,2));
+                    indx = find(y_part<-yrange,1)+rref_intervals(ct1,2)-1; % where yrrefend+yrange occurs
+                    
+                    
+                    if ct1<size(rref_intervals,1)
+                        % search until the start of next rref segment or
+                        % where yrrefend+yrange occurs (whichever occurs
+                        % first)
+                        indx = min([indx rref_intervals(ct1+1,1)]);  
+                    elseif isempty(indx) && ct1==size(rref_intervals,1)
+                        indx = min([indx length(y_all)]);
+                    end
+                                            
+                    if any(v_all(rref_intervals(ct1,2):indx)<vthreshold)
+                         
+                        % After start of instability, find instant at which
+                        % bbee reaches same y as at the start of
+                        % instability with positive v. Then, look back and find instant at
+                        % which velocity is smaller than vthreshold.
+                        
+                        % Where instability starts
+                        indx1 = find(v_all(rref_intervals(ct1,2):indx)<vthreshold,1) ...
+                                      +rref_intervals(ct1,2)-1; % 
+                        
+                        %
+                        
+                        indx2 = find(y_all(indx1:end)-y_all(indx1)<0 & ...
+                            v_all(indx1:end)>vthreshold, 1)+indx1-1;
+                        
+                        indx2 = find(v_all(indx1:indx2)<vthreshold,1,'last')+indx1-1; % Find where instability ended
+%                         [[1:length(y_all)]' y_all v_all]
+
+%                         if y_all(indx2)>y_all(rref_intervals(ct1,1)) % instability ends further away from where rref starts
+%                             continue; % bbee flew backwards
+%                         try
+                        if isempty(indx2) || y_all(indx2)>y_all(rref_intervals(ct1,1))
+                            % First condition - bbee flew backwards,
+                            % therefore instability end not stored
+                            % Second condition - start found, not end 
+                            instability_indices(ct1,1) = indx1;
+                            instabilityFollows(ct1) = true;
+                        else
+%                             try
+                            instability_indices(ct1,:) = [indx1 indx2];
+                            instabilityFollows(ct1) = true;
+                            instability_deltat(ct1) = diff(t_all([indx1 indx2]));
+                            instability_meanv(ct1) = mean(v_all(indx1:indx2));
+%                             catch
+%                                 keyboard;
+%                             end
+                        end
+%                         catch
+%                             keyboard;
+%                         end
+%                         
+                        
+                    end
+                    
+                end
+                obj.rrefSegments(ct).instabilityFollows = instabilityFollows;
+                obj.rrefSegments(ct).instability_indices = instability_indices;
+                obj.rrefSegments(ct).instability_deltat = instability_deltat;
+                obj.rrefSegments(ct).instability_meanv = instability_meanv;
+                obj.rrefSegments(ct).y_rrefEnd = arrayfun(@(x) y_all(x), rref_intervals(:,2));
+            end
+        end
+        
+        function compute_instabilityFollows2(obj)
+            % For every rref segment, checks whether instability follows
+            % i.e. if r decreases continuously after rref ends and V reaches < 0.05 m/s
+            
+            vthreshold = 0.05; % in m/s
+            
+            if isempty(obj.rrefSegments)
+                return
+            end
+            
+            indx = size(obj.filteredState,1);
+            t_all = obj.filteredState(1:indx,1)-obj.filteredState(1,1);
+            y_all = -obj.filteredState(1:indx,3);
+            v_all = obj.filteredState(1:indx,6);
+%             a_all = obj.filteredState(1:indx,9);
+            r = v_all./y_all;
+            diffr = diff(r);
+            
+            for ct=1:length(obj.rrefSegments)
+                if isempty(obj.rrefSegments(ct).intervals_ti)
+                    continue
+                end
+                rref_intervals = obj.rrefSegments(ct).intervals_ti;
+                
+%                 try
+%                 dum = diff(rref_intervals);
+%                 assert(all(dum(:)>0));
+%                 catch
+%                     keyboard
+%                 end
+%               Conclusion: rref segments are saved in increasing order of
+%               indices i.e., time!
+                
+                instabilityFollows = false(size(rref_intervals,1),1);
+                instability_indices = nan(size(rref_intervals,1),2);
+                instability_deltat = nan(size(rref_intervals,1),1);
+                instability_meanv = nan(size(rref_intervals,1),1);
+                for ct1=1:size(rref_intervals,1)
+                    
+                    indx = find(diffr(rref_intervals(ct1,2):end) > 0, 1, 'first') + rref_intervals(ct1,2);
+                    
+%                     y_part = y_all(rref_intervals(ct1,2):end)-y_all(rref_intervals(ct1,2));
+%                     indx = find(y_part<-yrange,1)+rref_intervals(ct1,2)-1; % where yrrefend+yrange occurs
+%                     
+%                     
+%                     if ct1<size(rref_intervals,1)
+%                         % search until the start of next rref segment or
+%                         % where yrrefend+yrange occurs (whichever occurs
+%                         % first)
+%                         indx = min([indx rref_intervals(ct1+1,1)]);  
+%                     elseif isempty(indx) && ct1==size(rref_intervals,1)
+%                         indx = min([indx length(y_all)]);
+%                     end
+                                            
+                    if any(v_all(rref_intervals(ct1,2):indx)<vthreshold)
+                         
+                        % After start of instability, find instant at which
+                        % bbee reaches same y as at the start of
+                        % instability with positive v. Then, look back and find instant at
+                        % which velocity is smaller than vthreshold.
+                        
+                        % Where instability starts
+                        indx1 = find(v_all(rref_intervals(ct1,2):indx)<vthreshold,1) ...
+                                      +rref_intervals(ct1,2)-1; % 
+                        
+                        %
+                        
+                        indx2 = find(y_all(indx1:end)-y_all(indx1)<0 & ...
+                            v_all(indx1:end)>vthreshold, 1)+indx1-1;
+                        
+                        indx2 = find(v_all(indx1:indx2)<vthreshold,1,'last')+indx1-1; % Find where instability ended
+%                         [[1:length(y_all)]' y_all v_all]
+
+%                         if y_all(indx2)>y_all(rref_intervals(ct1,1)) % instability ends further away from where rref starts
+%                             continue; % bbee flew backwards
+%                         try
+                        if isempty(indx2) || y_all(indx2)>y_all(rref_intervals(ct1,1))
+                            % First condition - bbee flew backwards,
+                            % therefore instability end not stored
+                            % Second condition - start found, not end 
+                            instability_indices(ct1,1) = indx1;
+                            instabilityFollows(ct1) = true;
+                        else
+%                             try
+                            instability_indices(ct1,:) = [indx1 indx2];
+                            instabilityFollows(ct1) = true;
+                            instability_deltat(ct1) = diff(t_all([indx1 indx2]));
+                            instability_meanv(ct1) = mean(v_all(indx1:indx2));
+%                             catch
+%                                 keyboard;
+%                             end
+                        end
+%                         catch
+%                             keyboard;
+%                         end
+%                         
+                        
+                    end
+                    
+                end
+                obj.rrefSegments(ct).instabilityFollows = instabilityFollows;
+                obj.rrefSegments(ct).instability_indices = instability_indices;
+                obj.rrefSegments(ct).instability_deltat = instability_deltat;
+                obj.rrefSegments(ct).instability_meanv = instability_meanv;
+                obj.rrefSegments(ct).y_rrefEnd = arrayfun(@(x) y_all(x), rref_intervals(:,2));
+            end
+        end
+        
+        function output = hasLowV(obj, ygroups, vthreshold)
+            % find if the current track has low V (< vthreshold) within
+            % each ygroup
+            % output - logical vector of size length(ygroup)-1 by 1
+            assert(all(diff(ygroups)>0));
+            
+            y0 = 0.05; % neglecting the part when the bbee covers first 5 cm towards the platform
+            y = -obj.filteredState(:,3);
+            indx = find(y<y(1)-y0, 1, 'first');
+            
+            y = -obj.filteredState(indx:end,3);
+            v = obj.filteredState(indx:end,6);
+            
+            output = arrayfun(@(x) any(v(y>=ygroups(x) & y<ygroups(x+1))<vthreshold), 1:length(ygroups)-1);
             
         end
         

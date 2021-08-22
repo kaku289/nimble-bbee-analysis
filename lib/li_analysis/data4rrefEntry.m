@@ -38,6 +38,8 @@ classdef data4rrefEntry < handle
         delta_y_actual; % N by 1
         
         yEntryStart;
+        vEntryStart;
+        rEntryStart;
         delta_Ventry;
         delta_tentry;
         amean_entry;
