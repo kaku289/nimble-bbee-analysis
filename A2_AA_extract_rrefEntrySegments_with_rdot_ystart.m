@@ -62,7 +62,7 @@ behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
 factors = [1.5];
-
+wind_speed = [0 0 0];
 interval_for_rdot_estimate = [0.2 0.8]; % in percentage of rref
 for ct_pattern = 1:length(pattern)
     for ct_light = 1:length(light)
@@ -114,7 +114,7 @@ for ct_pattern = 1:length(pattern)
                               excerpt = track.state_LDF(ct_excerpt);
                               
                               excerpt.find_rrefEntry();
-                              excerpt.find_rdot_estimate_in_rrefEntry(interval_for_rdot_estimate);
+                              excerpt.find_rdot_estimate_in_rrefEntry(wind_speed);
                               
                               %%%% Check - Comment for normal running %%%
 %                               if any((excerpt.rrefEntrySegments(4).delta_r > -excerpt.rrefEntrySegments(4).rref) & excerpt.rrefEntrySegments(4).isRise)
@@ -435,15 +435,17 @@ for ct_factor=1:length(factors)
     delta_V = vertcat(data_fac.delta_Ventry);
     delta_t = vertcat(data_fac.delta_tentry);
     amean = vertcat(data_fac.amean_entry);
+    mean_deltar = vertcat(data_fac.mean_deltar);
+    mean_Ua = vertcat(data_fac.mean_Ua);
     
     data_write = [data_write; ...
         vertcat(approach{:}) vertcat(side{:}) vertcat(pattern{:}) ...
-        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r rdot factor*ones(size(r,1),1) isRise delta_r vertcat(hasTakeoff_fac{:}) yStart delta_V delta_t amean];
+        vertcat(light{:}) vertcat(time{:}) vertcat(day{:}) y r rdot factor*ones(size(r,1),1) isRise delta_r vertcat(hasTakeoff_fac{:}) yStart delta_V delta_t amean mean_deltar mean_Ua];
 end
 
 if writeFile
     T = array2table(data_write, ...
-        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','rref','rdot','threshold', 'isRise', 'delta_r', 'hasTakeoff', 'ystart', 'deltaV', 'deltaT', 'Amean'});
+        'VariableNames',{'approach','landingSide','pattern','light','time','day','y','rref','rdot','threshold', 'isRise', 'delta_r', 'hasTakeoff', 'ystart', 'deltaV', 'deltaT', 'Amean','mean_deltar','mean_Ua'});
     writetable(T,r_file);
 end
 

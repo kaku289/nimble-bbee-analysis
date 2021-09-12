@@ -156,6 +156,8 @@ histogram(deltar);
 
 %% Plot supplementary figure
 clc; close all;
+map = brewermap(3,'Set1'); 
+
 data1 = data([data.amean]>0);
 
 a = vertcat(data1.a);

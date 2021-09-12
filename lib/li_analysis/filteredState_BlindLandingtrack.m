@@ -948,10 +948,12 @@ classdef filteredState_BlindLandingtrack < handle
             
         end
         
-        function find_rdot_estimate_in_rrefEntry(obj, start_end)
+        function find_rdot_estimate_in_rrefEntry(obj, wind_speed)
             % Goes through obj.rrefEntrySegments and finds rdot estimate
             % between [x1*rref x2*rref] entry segment where x1,
             % x2 vary from 0 to 1
+            % wind_speed (for computation of mean airspeed during entry
+            % segment) 1 by 3 vector
             
             if isempty(obj.rrefEntrySegments)
                 return
@@ -961,6 +963,7 @@ classdef filteredState_BlindLandingtrack < handle
             t_all = obj.filteredState(1:indx,1)-obj.filteredState(end,1);
             y_all = obj.filteredState(1:indx,3);
             v_all = obj.filteredState(1:indx,6);
+            U_all = obj.filteredState(1:indx,5:7);
             a_all = obj.filteredState(1:indx,9);
             r = v_all./y_all;
 %             diffr = diff(r);
@@ -985,6 +988,7 @@ classdef filteredState_BlindLandingtrack < handle
                     r_interval = r(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
                     y_interval = y_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
                     v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    U_interval = U_all(rrefEntry_interval(1):rrefEntry_interval(2),:);   % it is negative (as y definition is negatie up until here)                 
                     a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
                     intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
                     obj.rrefEntrySegments(ct).const_rvst(ct1,1) = intercept_slope(1);
@@ -1042,7 +1046,9 @@ classdef filteredState_BlindLandingtrack < handle
                     rresid = r_interval - [ones(length(t_interval),1) t_interval t_interval.^2]*model2;
                     obj.rrefEntrySegments(ct).AICc2(ct1,1) = length(r_interval)*log(sum(rresid.^2)/length(r_interval)) + 6 + 24/(length(r_interval)-4);
                     obj.rrefEntrySegments(ct).BIC2(ct1,1) = length(r_interval)*log(sum(rresid.^2)/length(r_interval)) + 3*log(length(r_interval));
-
+                    
+                    obj.rrefEntrySegments(ct).mean_deltar(ct1,1) = mean(rref-r_interval); % deltar(t)= r*-r(t) averaged
+                    obj.rrefEntrySegments(ct).mean_Ua(ct1,1) = mean((sum((wind_speed-U_interval).^2,2)).^0.5); % mean airspeed
                 end
             end
             

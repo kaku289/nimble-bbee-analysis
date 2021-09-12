@@ -53,6 +53,9 @@ classdef data4rrefEntry < handle
         
         amean_rdotsim; % vector N by 1
         
+        mean_deltar; % deltar(t)= r*-r(t) averaged
+        mean_Ua; % mean airspeed
+        
     end
      methods
          function obj = data4rrefEntry()
