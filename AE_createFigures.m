@@ -163,13 +163,12 @@ clc; close all;
 inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref_rrefEntry.mat';
 % load(inputFile);
 
-DirPlots = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_with_videos';
-delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = false;
-savePDFs = false;
+DirPlots = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/plots/BlindLandingTracks/mult_rref_entry_with_videos';
+delPreviousPlots = true; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = true;
+savePDFs = true;
 
-pattern = {'checkerboard', 'spokes'};
-light = {'low', 'medium', 'high'};
+winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
 factors = [0.25:0.25:2.5];
@@ -178,126 +177,128 @@ chosen_fac = 1;
 data4video = struct.empty;
 % tracks_fac(length(pattern), length(light)) = filteredState_BlindLandingtrack.empty; % tracks for chosen factor
 
-for ct_pattern = 1:length(pattern)
-    for ct_light = 1:length(light)
-        for ct_behaviour = 2%1:length(behaviour)
-            disp(' ');
-            disp(['Pattern: ' pattern{ct_pattern} ...
-                  ', light: ' light{ct_light} ...
-                  ', behaviour: ' behaviour{ct_behaviour}]);
-              
-            % Delete previous plots
-            if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]), 'dir')
-                rmdir(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]),'s');
-            end
-        
-            % Create sub-directory for each treatment if it doesn't exist
-            if savePlots && ~exist(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]), 'dir')
-                mkdir(fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]));
-            end
-            DirPlots_treatment = fullfile(DirPlots, [pattern{ct_pattern} '_' light{ct_light} '_' behaviour{ct_behaviour}]);
-        
-            % Selecting relevant treatments
-            if strcmpi(behaviour{ct_behaviour}, 'rising')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==1);
-            elseif strcmpi(behaviour{ct_behaviour}, 'constant')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)>1 & ...
-                                     rem(1:length(treatments), 8)<8);
-            elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
-                relevantTreatments = treatments(strcmpi({treatments.pattern}, pattern{ct_pattern}) & ...
-                                     strcmpi({treatments.light}, light{ct_light}) & ...
-                                     rem(1:length(treatments), 8)==0);
-            else
-                error('What other treatments did you perform dude?')
-            end
+for ct_wind = 6%1:length(winds)
+    for ct_behaviour = 2%1:length(behaviour)
+        disp(' ');
+        disp([' wind: ' num2str(winds(ct_wind)) ...
+                ', behaviour: ' behaviour{ct_behaviour}]);
             
-            clear dummy;
-            for ct_treatment=1:length(relevantTreatments)
+        % Delete previous plots
+        if delPreviousPlots && savePlots && exist(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]), 'dir')
+            rmdir(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]),'s');
+        end
+        
+        % Create sub-directory for each treatment if it doesn't exist
+        if savePlots && ~exist(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]), 'dir')
+            mkdir(fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]));
+        end
+        DirPlots_treatment = fullfile(DirPlots, [num2str(winds(ct_wind)) '_' behaviour{ct_behaviour}]);
+        
+        
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+        
+        % Only analyse treatments that have uniform wind measurements
+        % avaliable throughout their course of running
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+        
+        clear dummy;
+        for ct_treatment=1:length(relevantTreatments)
+            
+            treatment = relevantTreatments(ct_treatment);
+            videoTimes = [[treatment.videosInfo.startTime]' [treatment.videosInfo.endTime]'];
+            
+            % collect time vectors for tracks with multiple r*
+            landingTracks = [treatment.landingTracks];
+            state_LDF = [landingTracks.state_LDF];
+            has_multiple_rrefs = arrayfun(@(x) size(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti, 1) > 1, state_LDF);
+            has_multiple_entries = arrayfun(@(x) size(x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-chosen_fac)<1e-6).intervals, 1) > 1, state_LDF);
+            state_LDF_multiple_rrefs = state_LDF(has_multiple_rrefs & has_multiple_entries);
+            
+            landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
+            landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
+            landingTracks_indx4stateLDF = landingTracks_indx4stateLDF(has_multiple_rrefs & has_multiple_entries);
+            
+            for ct_track = 1:length(state_LDF_multiple_rrefs)
+                x = state_LDF_multiple_rrefs(ct_track);
+                intervals_ti = x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti;
+                time4rrefEstimate = arrayfun(@(i) state_LDF_multiple_rrefs(ct_track).filteredState(intervals_ti(i,1):intervals_ti(i,2), 1),1:size(intervals_ti,1), 'UniformOutput', false);
+                time4rrefEstimate = time4rrefEstimate{:};
                 
-                treatment = relevantTreatments(ct_treatment);
-                videoTimes = [[treatment.videosInfo.startTime]' [treatment.videosInfo.endTime]'];
+                entry_intervals_ti = x.rrefEntrySegments(abs([x.rrefEntrySegments.factor]-chosen_fac)<1e-6).intervals;
+                time4rrefEntry = arrayfun(@(i) state_LDF_multiple_rrefs(ct_track).filteredState(entry_intervals_ti(i,1):entry_intervals_ti(i,2), 1),1:size(entry_intervals_ti,1), 'UniformOutput', false);
+                time4rrefEntry = time4rrefEntry{:};
                 
-                % collect time vectors for tracks with multiple r*
-                landingTracks = [treatment.landingTracks];
-                state_LDF = [landingTracks.state_LDF];
-                has_multiple_rrefs = arrayfun(@(x) size(x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti, 1) > 1, state_LDF);
-                state_LDF_multiple_rrefs = state_LDF(has_multiple_rrefs);
+                % Find if there is any video
+                if ~isempty(videoTimes)
+                    isVideoUseful = min(time4rrefEntry)>= videoTimes(:,1) & max(time4rrefEstimate) <= videoTimes(:,2);
+                else
+                    isVideoUseful = false;
+                end
                 
-                landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
-                landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
-                landingTracks_indx4stateLDF = landingTracks_indx4stateLDF(has_multiple_rrefs);
-                
-                for ct_track = 1:length(state_LDF_multiple_rrefs)
-                    x = state_LDF_multiple_rrefs(ct_track);
-                    intervals_ti = x.rrefSegments(abs([x.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti;
-                    time4rrefEstimate = arrayfun(@(i) state_LDF_multiple_rrefs(ct_track).filteredState(intervals_ti(i,1):intervals_ti(i,2), 1),1:size(intervals_ti,1), 'UniformOutput', false);
+                if any(isVideoUseful)
+                    data4video(end+1).videoInfo = treatment.videosInfo(isVideoUseful);
+                    data4video(end).state_LDF = x;
+                    data4video(end).landingTrack = landingTracks(landingTracks_indx4stateLDF(ct_track));
+                    data4video(end).treatment = treatment;
                     
-                    time4rrefEstimate = time4rrefEstimate{:};
-                    
-                    % Find if there is any video
-                    if ~isempty(videoTimes)
-                        isVideoUseful = min(time4rrefEstimate)>= videoTimes(:,1) & max(time4rrefEstimate) <= videoTimes(:,2);
-                    else
-                        isVideoUseful = false;
-                    end
-                    
-                    if any(isVideoUseful)
-                        data4video(end+1).videoInfo = treatment.videosInfo(isVideoUseful);
-                        data4video(end).state_LDF = x;
-                        data4video(end).landingTrack = landingTracks(landingTracks_indx4stateLDF(ct_track));
-                        data4video(end).treatment = treatment;
+                    if savePlots
+                        track = landingTracks(landingTracks_indx4stateLDF(ct_track));
+                        plotHandles = x.plot_rrefs(chosen_fac);
                         
-                        if savePlots
-                            track = landingTracks(landingTracks_indx4stateLDF(ct_track));
-                            plotHandles = x.plot_rrefs(chosen_fac);
+                        if ~isempty(plotHandles)
                             
-                            if ~isempty(plotHandles)
+                            % Resizing the figures
+                            for i=1:length(plotHandles)
+                                plotHandles(i).Position(3) = 680;
+                                plotHandles(i).Position(4) = 545;
                                 
-                                % Resizing the figures
-                                for i=1:length(plotHandles)
-                                    plotHandles(i).Position(3) = 680;
-                                    plotHandles(i).Position(4) = 545;
-                                    
-                                    if i==1
-                                        figureName = ['fac_' num2str(chosen_fac,'%0.2f') '_' ...
-                                            num2str(treatment.datenum) '_' ...
-                                            num2str(treatment.startTime) '_' num2str(treatment.endTime) ...
-                                            '_obj' num2str(track.obj_id) '.png'];
-                                    end
-                                    
-                                    saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
-                                    
-                                    if savePDFs
-                                        print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
-                                            '.png','.pdf'), '-dpdf');
-                                    end
+                                if i==1
+                                    figureName = ['fac_' num2str(chosen_fac,'%0.2f') '_' ...
+                                        num2str(treatment.datenum) '_' ...
+                                        num2str(treatment.startTime) '_' num2str(treatment.endTime) ...
+                                        '_obj' num2str(track.obj_id) '.png'];
                                 end
                                 
-                                close(plotHandles);
+                                saveas(plotHandles(i), fullfile(DirPlots_treatment, figureName) ,'png');
                                 
+                                if savePDFs
+                                    print(plotHandles(i), strrep(fullfile(DirPlots_treatment, figureName), ...
+                                        '.png','.pdf'), '-dpdf');
+                                end
                             end
                             
+                            close(plotHandles);
+                            
                         end
-%                     else
-%                         data4video(end+1).videoInfo = recordedVideosInformation.empty;
+                        
                     end
-                    
+                    %                     else
+                    %                         data4video(end+1).videoInfo = recordedVideosInformation.empty;
                 end
-                % 
                 
             end
-            
-            
+            %
             
         end
+        
+        
+        
     end
 end
 
-% Display track with multiple r* that have a video associated with it
+% Display track with multiple r* and entry that have a video associated with it
 for ct=1:length(data4video)
     if ~isempty(data4video(ct).videoInfo)
         track = data4video(ct).landingTrack;
@@ -310,11 +311,12 @@ end
 
 % Find video for a particular track
 for ct=1:length(data4video)
-    if ~isempty(data4video(ct).videoInfo) && data4video(ct).treatment.datenum == 20190704 ...
-            && data4video(ct).treatment.startTime == 110000 && data4video(ct).landingTrack.obj_id == 3481
-        keyboard;
+    if ~isempty(data4video(ct).videoInfo) && data4video(ct).treatment.datenum == 20190722 ...
+            && data4video(ct).treatment.startTime == 123000 && data4video(ct).landingTrack.obj_id == 3201
+%         keyboard;
         data4video(ct).videoInfo
         track = data4video(ct).landingTrack;
+        ct
         disp([num2str(track.datenum) '_' track.foldername(10:15) '_obj' num2str(track.obj_id) ]);
 %         disp(ct);
     else
@@ -325,14 +327,14 @@ end
 % Selected track for video
 % fac_1.00_20190704_110000_123000_obj1443_track52_excerpt1
 % fac_1.00_20190704_110000_123000_obj1491_track56_excerpt1
-ct_selected = 13;
+ct_selected = 6;
 track = data4video(ct_selected).landingTrack;
 video = data4video(ct_selected).videoInfo;
 stateLDF = data4video(ct_selected).state_LDF;
 
 % load movie data
 % [videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, data4video(ct_selected).videoInfo.name));
-[videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '85.fmf')));
+[videodata, timestamps] = fmf_read(fullfile(data4video(ct_selected).videoInfo.folder, data4video(ct_selected).videoInfo.name));
 t_start = data4video(ct_selected).state_LDF.filteredState(1,1);
 t_end = data4video(ct_selected).state_LDF.filteredState(end,1);
 intervals_ti = stateLDF.rrefSegments(abs([stateLDF.rrefSegments.factor]-chosen_fac)<1e-6).intervals_ti;
@@ -369,13 +371,29 @@ end
 images = videodata(:,:,start_frame:end_frame);
 % Save images
 Directory = '/home/reken001/Pulkit/MATLAB/graphs';
-filename = fullfile(Directory, strrep(data4video(ct_selected).videoInfo.name, '84.fmf', '85'));
+filename = fullfile(Directory, data4video(ct_selected).videoInfo.name);
 % rmdir(filename);
 mkdir(filename);
-for i=1:15:size(images,3)
+for i=1:12:size(images,3)
     imwrite(images(:,:,i), fullfile(filename, [num2str(i,'%03.f') '.png']));
 end
+rmdir(filename,'s');
 
+
+% % Create time series plot of states
+BlindLandingtrack.plotDataLDF_Time3_forArticle(stateLDF, stateLDF.filteredState(1,1))
+subplot(4,1,1);
+ylim([0 0.4]);
+yticks([0:0.2:0.4]);
+subplot(4,1,2);
+ylim([-0.4 0.7]);
+yticks([-0.4:0.2:0.6]);
+subplot(4,1,3);
+ylim([-6 6]);
+yticks([-6:6:6]);
+subplot(4,1,4);
+ylim([-2 6]);
+yticks([-2:2:6]);
 %% Loading data and collecting segments with rref
 clc; close all;
 % clear;
@@ -1348,6 +1366,16 @@ end
 T = readtable(r_file);
 data_write = table2array(T);
 data_ss = data_write(data_write(:,1)==1,:);
+
+figure;
+histogram(data_ss(:,6));
+% bbee_histfit = histfit(-vertcat(data.rmean),[],'Gamma')
+xlabel('Change in set-points,Delta r* (s-1)', 'FontSize', 16);
+ylabel('Occurences', 'FontSize', 16);
+set(gca, 'FontSize', 16);
+
+
+
 for ct=1:length(winds)
     wind = winds(ct);
     N_lowV_takeoff(ct) = sum(data_ss(data_ss(:,2) == wind & data_ss(:,3) == 1,end));

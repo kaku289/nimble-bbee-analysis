@@ -32,6 +32,7 @@ addpath('./lib/hline_vline');
 inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF.mat';
 % inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/BlindLanding_and_aborted_tracks_A3_LDF.mat';
 % load(inputFile);
+windValues = [0, 0.28, 0.98 1.77 2.54 3.41];
 
 winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
@@ -108,10 +109,19 @@ for ct_wind = 1:length(winds)
                 
                 % For instability
                 stateLDF = [treatment.landingTracks.state_LDF];
+                
+% %                 % Only choose tracks start beyond max(ygroups) i.e., y=0.25
+% %                 % This is only for hasLowV analysis
+% %                 isTrackUseful = arrayfun(@(x) -x.filteredState(1,3)>=max(ygroups), stateLDF);
+                isTrackUseful = arrayfun(@(x) true, stateLDF);
+                stateLDF = stateLDF(isTrackUseful);
+                hastakeoff = hastakeoff_pertreatment{ct_treatment}';
+                
+                
                 hasLowV = arrayfun(@(x) x.hasLowV(ygroups, vthreshold), stateLDF, 'UniformOutput', false);
                 hasLowV = vertcat(hasLowV{:});
                 ygroupnumber = repmat(1:4, size(hasLowV,1), 1);
-                hastakeoff = repmat(hastakeoff_pertreatment{ct_treatment}', 1, 4);
+                hastakeoff = repmat(hastakeoff(isTrackUseful), 1, 4);
                 approach_mat = repmat([approach+1:approach+length(stateLDF)]', 1, 4);
                 
                 side = {stateLDF.landingSide};
@@ -154,10 +164,12 @@ close all;
 figure;
 % subplot(2,1,1);
 bar(winds, Nperday./NrelevantTreatments);
+bar(windValues, Nperday./NrelevantTreatments);
 ylabel('Avg. no. of landings per day', 'FontSize', 14);
 xlabel('Wind conditions', 'FontSize', 14);
 set(gca, 'FontSize', 16);
 ylim([0 500]);
+xticks([windValues]);
 % figure;
 % % subplot(2,1,2);
 % bar(winds, Nperday_aborted./NrelevantTreatments);
@@ -226,7 +238,7 @@ if writeFile
     writetable(T,r_file);
 end
 
-% Write file for N_track analysis in R
+%% Write file for N_track analysis in R
 writeFile = true;
 r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_Ntracks_perTreatment_Rstudio.txt';
 if writeFile
@@ -236,7 +248,7 @@ if writeFile
 end
 
 
-% %  Write file for analysis in R for 19421 tracks
+%% %  Write file for analysis in R for 19421 tracks
 writeFile = true;
 r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_all_trajs_Rstudio.txt';
 data_write = [];
@@ -292,8 +304,124 @@ if writeFile
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
+%% Plot average track in 3D for each wind condition
+% No approach velocity is plotted
 close all;
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0];
+
+% Plot all individual tracks (every n-th track)
+skip_step = 60;
+
+trajPlot = figure; hold on;
+
+tracks_plotted = 0;
+for ct=1:length(data_all)
+    for ct1=1:skip_step:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+%         [~, ymin_indx] = min(xyz(:,2));
+%         
+%         [data_cmap, ~] = discretize(data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,6), edges);
+%         scatter3(xyz(ymin_indx:end,1), -1*xyz(ymin_indx:end,2), xyz(ymin_indx:end,3), 2, cmap(data_cmap',:),'filled','o');
+        plot3(xyz(ymin_indx:end,1), -1*xyz(ymin_indx:end,2), xyz(ymin_indx:end,3),'Color',[0.6 0.6 0.6]); 
+        if ct==1 && ct1==1
+            hold on;
+        end
+        % Use discretize to find correspondece within colormap as per V
+        
+        % Plot the approach between max distance to min distance
+%         plot(-data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,3), data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,6),'Color',[189,189,189]/255)
+%         plot(data(ct).tracks_fac(ct1).filteredState(:,3), data(ct).tracks_fac(ct1).filteredState(:,6),'Color',[189,189,189]/255)
+
+        tracks_plotted = tracks_plotted + 1;
+    end
+end
+% Landing Disc
+[X,Y,Z] = cylinder(treatment.landingDiscs(1).radius);
+radius = treatments(1).landingDiscs(1).radius;
+
+figure(trajPlot);
+plot3([-radius; radius], [0 0], [0 0], 'LineWidth', 2, 'Color', [83 83 83]./255);
+plot3([0 0], [0 0], [-radius; radius], 'LineWidth', 2, 'Color', [83 83 83]./255);
+zlabel('z (m)', 'FontSize', 14);
+ylabel('y (m)', 'FontSize', 14);
+xlabel('x (m)', 'FontSize', 14);
+axis equal;
+xlim([-0.4 0.4]);
+xticks([-0.4:0.2:0.4]);
+ylim([0 0.4]);
+yticks([0:0.1:0.4]);
+zlim([-0.25 0.25]);
+zticks([-0.25:0.25:0.25]);
+set(gca, 'FontSize', 16);
+
+view(0,90);
+view(-90,0);
+% Collect tracks from ymax to end
+
+for ct=1:length(data_all)
+    data_all(ct).filteredStates_all = struct.empty;
+    for ct1=1:1:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+        [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,:);
+    end
+end
+
+ybins = -0.4:0.005:-0.01;
+for ct2=1:length(data_all)
+
+    % Plot mean track    
+    tracks = [data_all(ct2).filteredStates_all];
+    data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+    data_xyzuvw = vertcat(data_xyzuvw{:});
+    xyzuvw = [];
+    y = [];
+    sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+    r = [];
+    sem_r = [];
+    for ct=1:length(ybins)-1
+        dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+        y = [y; mean(ybins(ct:ct+1))];
+        xyzuvw = [xyzuvw; mean(dummy)];
+        r = [r; mean(dummy(:,5)./dummy(:,2))];
+        sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+    %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+        sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+    %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+    end
+
+    figure(trajPlot);
+
+    % plot(-y,V+semV,'--k');
+    % plot(-y,V-semV,'--k');
+    % fill([-y fliplr(-y)],[V+semV fliplr(V-semV)], 'g');
+    plot3(xyzuvw(:,1),-xyzuvw(:,2),xyzuvw(:,3),'Color',colors(winds(ct2),:),'Linewidth',10)
+    set(gca, 'FontSize', 16);
+end
+
+%
+%% Plot average track in 3D for each wind condition
+% With approach velocity is plotted
+close all;
+
+% for wind colors
+colors = [189,189,189
+150,150,150
+115,115,115
+82,82,82
+37,37,37
+0,0,0]./255; % grayscale
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0]; % colorful ones (I like it!)
 
 % Plot all individual tracks (every 70th track)
 % Find Vrange
@@ -312,6 +440,7 @@ Vrange = [floor(Vrange(1)*10)/10 ceil(max(Vrange(2))*10)/10];
 
 % Choose colormap and find data edges for V in Vrange
 cmap = jet(round(diff(Vrange)/0.05));
+cmap = gray(round(diff(Vrange)/0.025));
 edges = round(linspace(Vrange(1),Vrange(2),size(cmap,1)+1),2); % # edges = # color bins + 1
 
 % [data_cmap, edges] = discretize(data,edges);
@@ -364,7 +493,7 @@ xlabel('x (m)', 'FontSize', 14);
 axis equal;
 xlim([-0.4 0.4]);
 xticks([-0.4:0.2:0.4]);
-ylim([0 0.32]);
+ylim([0 0.4]);
 yticks([0:0.1:0.4]);
 zlim([-0.25 0.25]);
 zticks([-0.25:0.25:0.25]);
@@ -386,34 +515,37 @@ for ct=1:length(data_all)
 end
 % Plot mean track
 ybins = -0.4:0.005:-0.01;
-tracks = [data_all.filteredStates_all];
-data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
-data_xyzuvw = vertcat(data_xyzuvw{:});
-xyzuvw = [];
-y = [];
-sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
-r = [];
-sem_r = [];
-for ct=1:length(ybins)-1
-    dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
-    y = [y; mean(ybins(ct:ct+1))];
-    xyzuvw = [xyzuvw; mean(dummy)];
-    r = [r; mean(dummy(:,5)./dummy(:,2))];
-    sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
-%     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
-    sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
-%     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+for ct2=1:length(data_all)
+
+    % Plot mean track    
+    tracks = [data_all(ct2).filteredStates_all];
+    data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+    data_xyzuvw = vertcat(data_xyzuvw{:});
+    xyzuvw = [];
+    y = [];
+    sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+    r = [];
+    sem_r = [];
+    for ct=1:length(ybins)-1
+        dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+        y = [y; mean(ybins(ct:ct+1))];
+        xyzuvw = [xyzuvw; mean(dummy)];
+        r = [r; mean(dummy(:,5)./dummy(:,2))];
+        sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+    %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+        sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+    %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+    end
+
+    figure(trajPlot);
+
+    % plot(-y,V+semV,'--k');
+    % plot(-y,V-semV,'--k');
+    % fill([-y fliplr(-y)],[V+semV fliplr(V-semV)], 'g');
+    plot3(xyzuvw(:,1),-xyzuvw(:,2),xyzuvw(:,3),'Color',colors(winds(ct2),:),'Linewidth',5)
+    set(gca, 'FontSize', 16);
 end
-
-figure(trajPlot);
-
-% plot(-y,V+semV,'--k');
-% plot(-y,V-semV,'--k');
-% fill([-y fliplr(-y)],[V+semV fliplr(V-semV)], 'g');
-plot3(xyzuvw(:,1),-xyzuvw(:,2),xyzuvw(:,3),'k','Linewidth',3)
-set(gca, 'FontSize', 16);
-
-
+keyboard;
 figure; hold on;
 % plot(-y,xyzuvw(:,4)+sem_xyzuvw(:,4),'--k');
 % plot(-y,xyzuvw(:,4)-sem_xyzuvw(:,4),'--k');
@@ -669,7 +801,8 @@ for ct_ic = 1:length(ic)
 %         yticks([0:0.1:0.5]);
 %     end
 
-    xlim([0 0.32]);
+    xlim([0 0.4]);
+%     ylim([0 0.6]);
     xline(0.04); xline(0.11);
     
     subplot(2,1,2);
@@ -678,7 +811,108 @@ for ct_ic = 1:length(ic)
     set(gca, 'FontSize', 16);
     ylim([0 6]);
     yticks([0:2:6]);
-    xlim([0 0.32]);
+    xlim([0 0.4]);
+    xline(0.04); xline(0.11);
+%     legend(legendString);
+    
+    legend(arrayfun(@(x) num2str(x),winds,'UniformOutput',false));
+end
+
+%% %%%%%%%%%%% Plot average airspeed in the horizontal plane and approach velocity for different wind conditions
+%%% separately for landings from free-flight and take-off
+close all;
+% Collect tracks from ymax to end
+for ct=1:length(data_all)
+    data_all(ct).filteredStates_all = struct.empty;
+    for ct1=1:1:length(data_all(ct).state_LDF)
+        % y is pointing inside the platform here, therefore looking at ymin
+        % for maximum distance away from the platform
+        xyz = data_all(ct).state_LDF(ct1).filteredState(:,[2 3 4]); % the complete trajectory
+        [~, ymin_indx] = min(data_all(ct).state_LDF(ct1).filteredState(:,3));
+        data_all(ct).filteredStates_all(ct1).state = data_all(ct).state_LDF(ct1).filteredState(ymin_indx:end,:);
+    end
+end
+
+ybins = -0.4:0.005:-0.01;
+
+cmap = jet(6);
+cmap([2 5],:) = [];
+colors = [cmap; 1 0 1; 1 0 0];
+
+% fig1 = figure; hold on;
+winds = unique([data_all.wind]);
+yrange = [0.02 0.12];
+
+ic = {'free-flight','take-off'}; % initial condition
+ic_hasTakeoff = [false, true];
+
+for ct_ic = 1:length(ic)
+    fig1 = figure;
+    legendString = {};
+    for ct_wind=1:length(data_all)
+        legendString{end+1} = num2str(winds(ct_wind));
+        tracks = arrayfun(@(x) data_all(x).filteredStates_all(data_all(x).wind == ct_wind & data_all(x).hastakeoff_pertreatment == ic_hasTakeoff(ct_ic)),1:length(data_all), 'UniformOutput', false);
+        tracks = [tracks{:}]; %[data_all([data_all.light] == ct_light).filteredStates_all];
+        data_xyzuvw = arrayfun(@(x) x.state(x.state(:,3)>=ybins(1) & x.state(:,3)<=ybins(end),[2:7]), tracks, 'UniformOutput', false);
+        data_xyzuvw = vertcat(data_xyzuvw{:});
+        xyzuvw = [];
+        y = [];
+        sem_xyzuvw = []; % standard error of the means, SEM = std(data)/sqrt(length(data));
+        r = [];
+        sem_r = [];
+        Va = []; % airspeed in the horizontal plane/3d (check formula)
+        sem_Va = [];
+        for ct=1:length(ybins)-1
+            dummy = data_xyzuvw(data_xyzuvw(:,2)>=ybins(ct) & data_xyzuvw(:,2)<ybins(ct+1), [1 2 3 4 5 6]);
+            y = [y; mean(ybins(ct:ct+1))];
+            xyzuvw = [xyzuvw; mean(dummy)];
+            r = [r; mean(dummy(:,5)./dummy(:,2))];
+            sem_xyzuvw = [sem_xyzuvw; std(dummy)/sqrt(size(dummy,1))];
+            %     sem_xyzuvw = [sem_xyzuvw; std(dummy)];
+            sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))/sqrt(size(dummy,1))];
+%             Va = [Va; mean(((dummy(:,4)-windValues(ct_wind)).^2+(dummy(:,5).^2)).^0.5)];
+            Va = [Va; mean(((dummy(:,4)-windValues(ct_wind)).^2+(dummy(:,5).^2)+(dummy(:,6).^2)).^0.5)];
+            sem_Va = [sem_Va; std(((dummy(:,4)-windValues(ct_wind)).^2+(dummy(:,5).^2)).^0.5)/sqrt(size(dummy,1))];
+            %     sem_r = [sem_r; std(dummy(:,5)./dummy(:,2))];
+        end
+        
+        
+        
+        
+        subplot(2,1,1); hold on;
+        fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+                
+        subplot(2,1,2); hold on;
+        a = fill([-y; flipud(-y)],[Va+sem_Va; flipud(Va-sem_Va)], colors(ct_wind,:), 'EdgeColor', colors(ct_wind,:));
+        
+        
+        
+    end
+
+    figure(fig1);
+    subplot(2,1,1);
+    ylabel('V (m s-1)', 'FontSize', 16);
+    title(ic{ct_ic}, 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+%     if ct_ic == 1
+%         ylim([0 0.3]);
+%         yticks([0:0.1:0.3]);
+%     elseif ct_ic == 2
+%         ylim([0 0.5]);
+%         yticks([0:0.1:0.5]);
+%     end
+
+    xlim([0 0.4]);
+%     ylim([0 0.6]);
+    xline(0.04); xline(0.11);
+    
+    subplot(2,1,2);
+    ylabel('Va (ms-1)', 'FontSize', 16);
+    xlabel('y (m)', 'FontSize', 16);
+    set(gca, 'FontSize', 16);
+    ylim([0 4]);
+    yticks([0:2:6]);
+    xlim([0 0.4]);
     xline(0.04); xline(0.11);
 %     legend(legendString);
     

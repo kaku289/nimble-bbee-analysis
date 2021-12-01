@@ -8,7 +8,7 @@ inputFile = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/Blin
 winds = unique([treatments.wind]);
 behaviour = {'rising','constant','sleeping'};
 
-y = [0.25 0.15]; % y's between which performance parameters are calculated
+y = [0.25 0.05]; % y's between which performance parameters are calculated
 clear dummy;
 
 data = struct.empty;
@@ -46,6 +46,8 @@ for ct_wind = 1:length(winds)
         treatment_indx4stateLDF = arrayfun(@(x) treatment_indx4landingTracks(x)*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
         treatment_indx4stateLDF = vertcat(treatment_indx4stateLDF{:});
         
+        startTimes = [relevantTreatments(treatment_indx4stateLDF).startTime];
+        
         landingTracks_indx4stateLDF = arrayfun(@(x) x*ones(length(landingTracks(x).state_LDF),1),1:length(landingTracks), 'UniformOutput', false);
         landingTracks_indx4stateLDF = vertcat(landingTracks_indx4stateLDF{:});
         
@@ -65,6 +67,7 @@ for ct_wind = 1:length(winds)
         dummy.landingTrack = landingTracks(landingTracks_indx4stateLDF(indices));
         dummy.hastakeoff = hastakeoff(indices);
         dummy.delta_t = delta_t(indices);
+        dummy.startTimes = startTimes(indices);
         data = [data; dummy];
     end
 end
@@ -88,7 +91,7 @@ for ct=1:length(winds)
     side(~isHive) = deal(2);
     
     data_write = [data_write;
-                  data(ct).delta_t data(ct).wind*ones(N,1) data(ct).hastakeoff' [1:N]' side [data(ct).landingTrack.datenum]'];
+                  data(ct).delta_t data(ct).wind*ones(N,1) data(ct).hastakeoff' data(ct).startTimes' side [data(ct).landingTrack.datenum]'];
 end
 
 writeFile = true;
@@ -97,6 +100,6 @@ r_file = '/media/reken001/Disk_07/steady_wind_experiments/postprocessing/data_la
 if writeFile
     T = array2table(data_write, ...
         'VariableNames',{'delta_t','wind','hasTakeoff',...
-                         'approach','landingSide','day'});
+                         'time','landingSide','day'});
     writetable(T,r_file);
 end

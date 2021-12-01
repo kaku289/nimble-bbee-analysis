@@ -1288,20 +1288,20 @@ classdef BlindLandingtrack < handle
                 subplotHandles(2) = subplot(4,1,2); hold on;
 %                 plot(state_subset(:,1)-t0, state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
                 plot(state_subset(:,1)-tend, state_subset(:,6),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
-                ylabel('V (m/s)', 'FontSize', 16);
+                ylabel('V (ms-1)', 'FontSize', 16);
     %             ylabel('Optical rate of expansion (1/s)', 'FontSize', 15);
                 set(gca, 'FontSize', 15); grid on;
                 
                 subplotHandles(3) = subplot(4,1,3); hold on;
                 plot(state_subset(:,1)-tend, state_subset(:,9),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
-                ylabel('a (m/s^2)', 'FontSize', 16);
+                ylabel('a (ms-2)', 'FontSize', 16);
 %                 xlabel('time (s)', 'FontSize', 16);
                 set(gca, 'FontSize', 15); grid on;
                 
                 subplotHandles(4) = subplot(4,1,4); hold on;
 %                 plot(state_subset(:,1)-t0, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
                 plot(state_subset(:,1)-tend, -1*state_subset(:,6)./state_subset(:,3),'.','MarkerSize',10,'MarkerFaceColor',[252,187,161]./255, 'MarkerEdgeColor',[252,187,161]./255');
-                ylabel('r (rad/s)', 'FontSize', 16);
+                ylabel('r (s-1)', 'FontSize', 16);
                 xlabel('time (s)', 'FontSize', 16);
                 set(gca, 'FontSize', 15); grid on;
 

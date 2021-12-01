@@ -44,6 +44,8 @@ classdef data4rrefEntry < handle
         delta_tentry;
         amean_entry;
         
+        mean_Ua; % mean airspeed
+        
     end
      methods
          function obj = data4rrefEntry()
