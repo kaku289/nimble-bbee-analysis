@@ -243,6 +243,20 @@ end
 indices = arrayfun(@(x) ~isempty(x.intervals_ti), data);
 data = data(indices);
 
+%% Write mat file for online dataset
+patternnums = unique([landing_tracks.patternnum]);
+assert(length(patternnums) == 10);
+tracks = struct;
+for ct=1:length(landing_tracks)
+    tracks(ct).state = landing_tracks(ct).state_LDF.filteredState(:,1:4);
+    tracks(ct).state(:,3) = -tracks(ct).state(:,3);
+    tracks(ct).flightID = landing_tracks(ct).flightID;
+    tracks(ct).setID = landing_tracks(ct).setID;
+    tracks(ct).pattern = landing_tracks(ct).patternnum;
+end
+
+save('landingTracks.mat','tracks');
+
 %% Write file for statistical analysis in R
 % This file contains data for all the factors
 
