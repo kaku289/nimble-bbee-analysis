@@ -268,8 +268,11 @@ clc;
 if isunix
     DirPlots = '/media/reken001/Disk_08_backup/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/articleA2_plots';
 elseif ispc
-    DirPlots = 'D:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/articleA2_plots';
+    DirPlots = 'H:/light_intensity_experiments/postprocessing/plots/BlindLandingTracks/articleA2_plots';
+    dataFile = 'H:/light_intensity_experiments/postprocessing/BlindLandingtracks_A2_rrefEntryEstimation_everything_f1pt5_all.mat';
 end
+
+% load(dataFile);
 
 delPreviousPlots = true; % BE CAREFUL - when set to true, all previously saved plots are deleted
 savePlots = true;
@@ -281,6 +284,9 @@ chosen_fac = 1.5;
 % behaviour = {'rising','constant','sleeping'};
 selected_tracks = {'20190704_153000_170000_obj7984_track234_excerpt1', '20190704_153000_170000_obj9821_track290_excerpt1', '20190708_140000_153000_obj664_track13_excerpt1', ...
                    '20190704_153000_170000_obj3509_track95_excerpt2', '20190708_140000_153000_obj6369_track116_excerpt1'};
+               
+selected_tracks = {'20190704_153000_170000_obj7984_track234_excerpt1', '20190704_153000_170000_obj9821_track290_excerpt1', '20190708_140000_153000_obj664_track13_excerpt1', ...
+                   '20190704_153000_170000_obj3509_track95_excerpt2'};
 
 for ct_pattern=2%1:length(pattern)
     for ct_light=3%1:length(light)
@@ -334,14 +340,15 @@ for ct_pattern=2%1:length(pattern)
         datenum = [landingTracks.datenum];
         obj_id = [landingTracks.obj_id];
         
-        for ct2=5%1:length(selected_tracks)
+        for ct2=1% 1:length(selected_tracks)
             selected_track_str = selected_tracks{ct2};
             selected_track_str_parts = strsplit(selected_track_str,'_');
             
             indx = find(datenum == str2num(selected_track_str_parts{1}) & obj_id == str2num(selected_track_str_parts{4}(4:end)));
 %             assert(length(indx)==1); % If not, tighten the indx selection with starting time of the treatment
             
-            ct1 = indx(2)           
+%             ct1 = indx(2)   % For  ct==5
+            ct1 = indx(1) 
            
             excerpt = str2num(selected_track_str_parts{end}(end));
             hasTakeoff = landingTracks(ct1).state_LDF(excerpt).hasTakeoff(relevantTreatments(treatmentIndices(ct1)).landingDiscs)
@@ -357,7 +364,10 @@ for ct_pattern=2%1:length(pattern)
 %             plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_for_Vvst(chosen_fac)
             
             % For plotting V,r,A vs y curve
-            plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_with_acc(chosen_fac)
+%             plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rrefsEntry_with_acc(chosen_fac)
+            
+            % For plotting rdot Simulation in entry segments
+            plotHandles = landingTracks(ct1).state_LDF(excerpt).plot_rdotSimulation_with_actualdata(chosen_fac)
             
             
             if ~isempty(plotHandles)
