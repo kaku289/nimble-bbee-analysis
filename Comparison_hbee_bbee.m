@@ -30,9 +30,10 @@ clc; close all;
 % clear;
 % 
 inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
+inputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 % inputFile = '/media/reken001/Disk_12/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
 % inputFile = 'D:/light_intensity_experiments/postprocessing/BlindLandingtracks_A1_rref.mat';
-% load(inputFile);
+load(inputFile);
 treatments = treatments(1:14*8); % Taking experiments for 2 patterns * 3 lights
 
 
@@ -147,6 +148,7 @@ end
 clc; close all;
 
 inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+inputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];

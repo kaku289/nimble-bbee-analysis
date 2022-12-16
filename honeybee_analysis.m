@@ -6,12 +6,28 @@ addpath('./lib/li_analysis');
 % to include higher order accurate differentiation function
 addpath('./lib/diffxy');
 
+% to include boxplot2
+addpath('./lib/boxplot2-pkg/boxplot2');
+addpath('./lib/boxplot2-pkg/minmax');
+
+
 %% Load data
 clc; close all;
 clear;
 
-dataDir = '/media/reken001/Disk_11/honeybee_experiments/landing_tracks';
-outputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+if isunix
+    dataDir = '/media/reken001/Disk_11/honeybee_experiments/landing_tracks';
+    outputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+    DirPlots = '/media/reken001/Disk_12/honeybee_experiments/plots/rref_estimate';
+elseif ispc
+    dataDir = 'D:/honeybee_experiments/landing_tracks';
+    outputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+%     DirPlots = 'D:/honeybee_experiments/plots/rref_estimate';
+%     DirPlots = 'D:/honeybee_experiments/plots/rref_estimate_with_rawData';
+    DirPlots = 'D:/honeybee_experiments/plots/rref_estimate_forreview3';
+else
+    error("Unknown operating system. Please specify how to access the external drives here.");
+end
 
 % dataFiles = dir(fullfile(dataDir,'*.mat'));
 % Look for dataFiles in dataDir and its subfolders
@@ -26,10 +42,10 @@ end
 
 % dataFiles = vertcat(dataFiles{:});
 
-DirPlots = '/media/reken001/Disk_12/honeybee_experiments/plots/rref_estimate';
-delPreviousPlots = false; % BE CAREFUL - when set to true, all previously saved plots are deleted
-savePlots = false;
-savePDFs = false;
+
+delPreviousPlots = true; % BE CAREFUL - when set to true, all previously saved plots are deleted
+savePlots = true;
+savePDFs = true;
 
 % Delete previous plots
 if delPreviousPlots && savePlots && exist(fullfile(DirPlots), 'dir')
@@ -50,9 +66,9 @@ params = [0.29 1.02]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
 % from bumblebee data
 % params = [0.53 4.22]; % [sigma_{rmean-c_{r vs y, 0-1}}, sigma_{m_{r vs y, 0-1}}]
 
-factors = [0.25:0.25:2.5];
+% factors = [0.25:0.25:2.5];
 % factors = [1:0.5:2.5];
-% factors = 1.5;
+factors = 1.5;
 time_window = [min_gap max_gap];
 
 % indexes_tracks_to_not_analyse = [18:51 148:158 167:176 189:199]; %due to y-offset 
@@ -96,6 +112,8 @@ for ct_treatment = 1:length(dataFiles)
         N = length(dataFiles{ct_treatment}(ct).data.x);
         rawState = [ct*ones(N,1) [1:N]' [0:N-1]'/400 dataFiles{ct_treatment}(ct).data.x/1000 -dataFiles{ct_treatment}(ct).data.y/1000 dataFiles{ct_treatment}(ct).data.z/1000 ...
             zeros(N, 12)];% 18 columns (obj_id	frame	timestamp	x	y	z	xvel	yvel	zvel P00	P01	P02	P11	P12	P22	P33	P44	P55)
+        rawState(:,7:9) =  diffxy(rawState(:,3), rawState(:,4:6)); 
+        
         [~,pattern,~] = fileparts(dataFiles{ct_treatment}(ct).folder);
         landingTracks{ct_treatment}(ct).rawTrack = rawState_BlindLandingtrack(rawState, pattern);
         landingTracks{ct_treatment}(ct).dt = 1/175; %1/400;
@@ -173,9 +191,13 @@ for ct_treatment = 1:length(dataFiles)
                 
                 
                 plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs(factors(ct_factor));
-%                 plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs_parallax(factors(ct_factor));
-                %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
-                %             plotHandles = landingTracks(ct).state_LDF.plot_states();
+%                  plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs_with_rawData(factors(ct_factor), landingTracks{ct_treatment}(ct).raw_LDF.rawState);
+% % % %                 plotHandles = landingTracks{ct_treatment}(ct).state_LDF.plot_rrefs_parallax(factors(ct_factor));
+% % %                 %                                       plotHandles = excerpt.plot_rrefs_with3dspeed(factors(ct_factor));
+% % %                 %             plotHandles = landingTracks(ct).state_LDF.plot_states();
+                
+                
+
                 if ~isempty(plotHandles)
                     
                     % Resizing the figures
@@ -510,8 +532,11 @@ legend boxoff
 %% Extract dataset only for static patterns
 clc; close all;
 clear;
-
-inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+if isunix
+    inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+elseif ispc
+    inputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+end
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
@@ -1385,3 +1410,139 @@ axis equal;
 set(gca, 'FontSize', 16);
 view([0 90]);
 view([90 0]);
+
+%% Compare three landing strategies (AIC values)
+close all; clc;
+clear;
+
+inputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+DirPlots = 'D:/honeybee_experiments/plots/threeLandingStrategies';
+delPreviousPlots = false;
+savePlots = true;
+savePDFs = true;
+chosen_fac = 1.5;
+
+load(inputFile);
+
+landing_tracks = [landingTracks{:}];
+
+% Only for tracks containing more than one rrefs
+has_more_than_one_rrefs = arrayfun(@(x) length(x.state_LDF.rrefSegments(abs([x.state_LDF.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)>1,landing_tracks);
+N = sum(has_more_than_one_rrefs);
+landing_tracks_ss = landing_tracks(has_more_than_one_rrefs); % landing tacks subset containing two rrefs
+
+
+% Delete previous plots
+if delPreviousPlots && savePlots && exist(fullfile(DirPlots), 'dir')
+    rmdir(fullfile(DirPlots),'s');
+end
+% Create directory if it doesn't exist
+if savePlots && ~exist(fullfile(DirPlots), 'dir')
+    mkdir(fullfile(DirPlots));
+end
+
+for ct=1:length(landing_tracks_ss)
+    [plotHandles, aic] = landing_tracks_ss(ct).state_LDF.compute_and_compare_three_landing_strategies(chosen_fac, savePlots);
+    AIC(ct) = aic;
+                
+    if ~isempty(plotHandles)
+
+        % Resizing the figures
+        for i=1:length(plotHandles)
+            plotHandles(i).Position = [680 74 890 904];
+%             plotHandles(i).Position(3) = 1000;
+%             plotHandles(i).Position(4) = 900;
+
+            if i==1
+                figureName = ['fac_' num2str(chosen_fac,'%0.2f') '_track' ...
+                    num2str(ct) ...
+                    '.png'];
+            end
+
+            saveas(plotHandles(i), fullfile(DirPlots, figureName) ,'png');
+
+            if savePDFs
+                print(plotHandles(i), strrep(fullfile(DirPlots, figureName), ...
+                    '.png','.pdf'), '-dpdf');
+            end
+
+
+
+
+
+        end
+
+        close(plotHandles);
+
+    end
+end
+
+
+%%
+labels = {'constant-r approach', 'constant-taudot approach','stepwise changing r*'};
+createBoxPlot({[AIC.const_r]; [AIC.const_taudot]; [AIC.step_rref]}, labels, 'AIC'); 
+
+sum([AIC.step_rref]<[AIC.const_r])
+sum([AIC.step_rref]<[AIC.const_taudot])
+
+%% Compare average flight speed between hybrid and constant-r 
+close all; clc;
+clear;
+
+inputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+% DirPlots = 'D:/honeybee_experiments/plots/threeLandingStrategies';
+% delPreviousPlots = false;
+% savePlots = true;
+% savePDFs = true;
+chosen_fac = 1.5;
+
+load(inputFile);
+
+landing_tracks = [landingTracks{:}];
+
+% Only for tracks containing more than one rrefs
+has_more_than_one_rrefs = arrayfun(@(x) length(x.state_LDF.rrefSegments(abs([x.state_LDF.rrefSegments.factor]-chosen_fac)<1e-6).rref_ti)>1,landing_tracks);
+N = sum(has_more_than_one_rrefs);
+landing_tracks_ss = landing_tracks(has_more_than_one_rrefs); % landing tacks subset containing two rrefs
+
+
+% % Delete previous plots
+% if delPreviousPlots && savePlots && exist(fullfile(DirPlots), 'dir')
+%     rmdir(fullfile(DirPlots),'s');
+% end
+% % Create directory if it doesn't exist
+% if savePlots && ~exist(fullfile(DirPlots), 'dir')
+%     mkdir(fullfile(DirPlots));
+% end
+
+for ct=1:length(landing_tracks_ss)
+    [Vhybrid(ct), Vconst_r(ct)] = landing_tracks_ss(ct).state_LDF.compute_avgV(chosen_fac);
+end
+mean(Vhybrid./Vconst_r)
+std(Vhybrid./Vconst_r)
+%%
+labels = {'constant-r approach','stepwise changing r*'};
+createBoxPlot({Vconst_r; Vhybrid}, labels, 'V'); 
+%% Functions used in this script
+function figHandle = createBoxPlot(variable, labels, yxislabel)
+    % for boxplots of a cell array
+    col=@(x)reshape(x,numel(x),1);
+    boxplot2=@(C,varargin)boxplot(cell2mat(cellfun(col,col(C),'uni',0)),cell2mat(arrayfun(@(I)I*ones(numel(C{I}),1),col(1:numel(C)),'uni',0)),varargin{:});
+
+    
+    figHandle = figure; hold on;
+    figure(figHandle);
+    boxplot2(variable, 'Labels', labels, 'OutlierSize', 0.00001);
+%     hbox = gca;
+    set(gca, 'FontSize', 14); grid on;
+    xlabel('Treatments', 'FontSize', 14);
+    ylabel(yxislabel, 'FontSize', 14);
+    % ylim([0 1.5]);
+    for ct = 1:length(variable)
+            x=(ct+(rand(length(variable{ct, 1}),1)-0.5)/4);
+
+            f = scatter(x(:,1),variable{ct, 1},40,'k','filled'); 
+            f.MarkerFaceAlpha = 0.5;
+    %         keyboard;
+    end
+end

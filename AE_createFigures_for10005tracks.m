@@ -13,7 +13,11 @@ clc; close all;
 clear dummy
 clear;
 
-inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+if isunix
+    inputFile = '/media/reken001/Disk_11/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+elseif ispc
+    inputFile = 'D:/honeybee_experiments/postprocessing/BlindLandingtracks_A4_LDF_rref.mat';
+end
 load(inputFile);
 
 landing_tracks = [landingTracks{:}];
@@ -80,6 +84,10 @@ yrange = [0.15 0.35];
 % rref_R = 3.56; % from  analysis in R
 
 subplot(2,1,1); hold on;
+for ct=1:length(tracks)
+    state = tracks(ct).state;
+    plot(-state(:,3),state(:,6),'Color',[128,128,128]./255);
+end
 % plot(-y,xyzuvw(:,5)+sem_xyzuvw(:,5),'--k');
 % plot(-y,xyzuvw(:,5)-sem_xyzuvw(:,5),'--k');
 fill([-y; flipud(-y)],[xyzuvw(:,5)+sem_xyzuvw(:,5); flipud(xyzuvw(:,5)-sem_xyzuvw(:,5))],[252,187,161]./255, 'EdgeColor', [252,187,161]./255);
@@ -99,6 +107,10 @@ xticks([0:0.1:0.5]);
 % title(['r* : ' num2str(rref_R,3)], 'FontSize', 16);
 
 subplot(2,1,2); hold on;
+for ct=1:length(tracks)
+    state = tracks(ct).state;
+    plot(-state(:,3),state(:,6)./-state(:,3),'Color',[128,128,128]./255);
+end
 a = fill([-y; flipud(-y)],[-r+sem_r; flipud(-r-sem_r)],[252,187,161]./255, 'EdgeColor', [252,187,161]./255);
 plot(-y,-r,'Color',[252,187,161]./255,'Linewidth',1);
 ylabel('r (s-1)', 'FontSize', 16);
