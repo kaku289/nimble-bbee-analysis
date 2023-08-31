@@ -376,43 +376,14 @@ end
 
 %% Acceleration vs airspeed plot for article-3 discussion
 % Data is obtained from R script: 0.5821531 0.6591997 1.1471 1.862773 2.572135 3.448812
-% File: lme_model_steadywind_for_amean_with_ystart.R (look for
-% summary(means3)$response and median_Ua variables)
-figure;
+% File: 
 Amean = [1.327746 1.394981 1.470067 1.576800 1.709370 1.967488];
 mean_Ua = [0.5821531 0.6591997 1.1471 1.862773 2.572135 3.448812];
-theUltimateFIT_ay = fitlm(mean_Ua, Amean);
-plot(theUltimateFIT_ay)
+theUltimateFIT = fitlm(mean_Ua, Amean);
+plot(theUltimateFIT)
 xlabel('median airspeed in each wind condition, Ua (ms-1)', 'FontSize', 16);
-ylabel('mean acceleration in y-direction (ms-2)', 'FontSize', 16);
+ylabel('mean acceleration (ms-2)', 'FontSize', 16);
 set(gca, 'FontSize', 16);
-
-
-% Data is obtained from R script: A3_side_acceleration_analysis.R
-% (look for DUDT model)
-% Plotting Axmean with U_airspeed
-figure;
-Axmean = [-0.01554065  0.33907996  0.45244171  0.56703437  0.70772994  0.84728247];
-mean_Ua = [0.5853034 0.6618659 1.146865 1.862477 2.57035 3.444179];
-theUltimateFIT_ax = fitlm(mean_Ua(2:end), Axmean(2:end));
-plot(theUltimateFIT_ax)
-xlabel('median airspeed in each wind condition, Ua (ms-1)', 'FontSize', 16);
-ylabel('mean acceleration in x-direction (ms-2)', 'FontSize', 16);
-set(gca, 'FontSize', 16); hold on;
-plot(mean_Ua(1), Axmean(1),'o')
-
-% Data is obtained from R script: A3_side_acceleration_analysis.R
-% (look for DUDT model)
-% Plotting Axmean with Ux_airspeed
-figure;
-Axmean = [-0.01554065  0.33907996  0.45244171  0.56703437  0.70772994  0.84728247];
-mean_Uxa = -[-0.05078739 -0.04499692 -0.02516431 -0.01443011 0.02489778 0.0172593]+[0, 0.28, 0.98, 1.77, 2.54, 3.41];
-theUltimateFIT_ax2 = fitlm(mean_Uxa, Axmean);
-plot(theUltimateFIT_ax2)
-xlabel('median airspeed in x-direction in each wind condition, Uxa (ms-1)', 'FontSize', 16);
-ylabel('mean acceleration in x-direction (ms-2)', 'FontSize', 16);
-set(gca, 'FontSize', 16);
-
 %% Plot histogram of rdote
 chosen_fac = 1;
 dayCol = 5;

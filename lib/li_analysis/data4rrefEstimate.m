@@ -32,6 +32,11 @@ classdef data4rrefEstimate < handle
 %         rmean_td ; % N by 1
 %         slope_rvst_td ; % N by 1
 %         const_rvst_td ; % N by 1
+
+        %%%%% For side acceleration analysis %%%%%
+        rrefStartState; % N X 9 vector
+        rrefMeanState; % N X 9 vector
+        rrefDeltaState; % N X 9 vector
         
         %%%%% Parameters for statistical analysis %%%%%
         day; % day of the experiment
@@ -60,6 +65,11 @@ classdef data4rrefEstimate < handle
         instability_deltat; % N by 1
         instability_meanv; % N by 1
         instability_indices; % N by 2 (indexes where instability started and ended)
+
+        delta_Urref;
+        delta_Vrref;
+        delta_Wrref;
+        delta_trref;
         
     end
      methods

@@ -75,3 +75,72 @@ for ct_pattern = 2%1:length(pattern)
         end
     end
 end
+
+
+
+%% Create data files to be uploaded with manuscript
+clc; close all;
+% clear;
+% 
+inputFile = 'G:/steady_wind_experiments/postprocessing/BlindLandingtracks_A3_LDF_rref_rrefEntry.mat';
+% load(inputFile);
+
+outputFile = 'G:/steady_wind_experiments/postprocessing/landingTracks_forUpload.mat';
+
+winds = unique([treatments.wind]);
+behaviour = {'rising','constant','sleeping'};
+
+factors = [0.25:0.25:2.5];
+chosen_fac = 1;
+
+clear dummy data;
+data = struct.empty;
+
+for ct_wind = 1:length(winds)
+    dummy = struct.empty;
+    for ct_behaviour = 2%1:length(behaviour)
+        disp(' ');
+        disp([' wind: ' num2str(winds(ct_wind)) ...
+                ', behaviour: ' behaviour{ct_behaviour}]);
+
+        % Selecting relevant treatments
+        if strcmpi(behaviour{ct_behaviour}, 'rising')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==1);
+        elseif strcmpi(behaviour{ct_behaviour}, 'constant')
+            relevantTreatments = treatments( [treatments.wind] == winds(ct_wind) & ...
+                rem(1:length(treatments), 8)>1 & ...
+                rem(1:length(treatments), 8)<8);
+        elseif strcmpi(behaviour{ct_behaviour}, 'sleeping')
+            relevantTreatments = treatments(rem(1:length(treatments), 8)==0);
+        else
+            error('What other treatments did you perform dude?')
+        end
+
+        % Only analyse treatments that have uniform wind measurements
+        % available throughout their course of running
+        hasUniformHwData = arrayfun(@(x) x.hwData.hasUniformHwData,relevantTreatments);
+        relevantTreatments = relevantTreatments(hasUniformHwData);
+
+        %%%%%%%%%%%%%% Each wind condition  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        for ct_treatment = 1:length(relevantTreatments)
+            landingTracks = [relevantTreatments(ct_treatment).landingTracks];
+            state_LDF = [landingTracks.state_LDF];
+
+            for ct_track=1:length(state_LDF)
+                dummy(end+1).state = state_LDF(ct_track).filteredState(:,1:4);
+%                 dummy(end).state(:,3) = -dummy(end).state(:,3);
+                dummy(end).date = relevantTreatments(ct_treatment).datenum;
+                dummy(end).wind = relevantTreatments(ct_treatment).wind;
+                dummy(end).treatmentStartTime = relevantTreatments(ct_treatment).startTime;
+                dummy(end).treatmentEndTime = relevantTreatments(ct_treatment).endTime;
+                dummy(end).landingSide = state_LDF(ct_track).landingSide;
+            end
+        end
+
+        disp(size(dummy));
+
+        data = [data dummy];
+
+    end
+end
+save(outputFile, 'data');

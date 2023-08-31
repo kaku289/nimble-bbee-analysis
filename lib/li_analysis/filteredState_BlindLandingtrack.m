@@ -107,6 +107,7 @@ classdef filteredState_BlindLandingtrack < handle
 
             x_all = obj.filteredState(1:indx,2);
             z_all = obj.filteredState(1:indx,4);
+            state_all = obj.filteredState(1:indx,2:10);
 %             figure;
 %             plot(t_all,r_all,'o');
 %             text(t_all,r_all,string(1:length(r_all)));
@@ -224,6 +225,18 @@ classdef filteredState_BlindLandingtrack < handle
                     chosenIntervals_ti = Interval.findRepresentativeIntervals(intervalArray);
                     intervals_ti = possible_indices{ct_factor}(chosenIntervals_ti,:);
                     obj.rrefSegments(ct_factor).intervals_ti = intervals_ti;
+                    temp = arrayfun(@(i,j) state_all(i,:),intervals_ti(:,1),intervals_ti(:,2),'UniformOutput',false);
+                    obj.rrefSegments(ct_factor).rrefStartState = vertcat(temp{:});
+                    
+                    temp = arrayfun(@(i,j) mean(state_all(i:j,:)),intervals_ti(:,1),intervals_ti(:,2),'UniformOutput',false);
+                    obj.rrefSegments(ct_factor).rrefMeanState = vertcat(temp{:});
+
+                    temp = arrayfun(@(i,j) diff(state_all([i j],:)),intervals_ti(:,1),intervals_ti(:,2),'UniformOutput',false);
+                    obj.rrefSegments(ct_factor).rrefDeltaState = vertcat(temp{:});
+
+%                     assert(size(obj.rrefSegments(ct_factor).rrefStartState,1) == size(intervals_ti,1));
+%                     assert(size(obj.rrefSegments(ct_factor).rrefMeanState,1) == size(intervals_ti,1));
+
                     obj.rrefSegments(ct_factor).rref_ti = arrayfun(@(i,j) sum(y_all(i:j).*v_all(i:j))/sum(y_all(i:j).^2),intervals_ti(:,1),intervals_ti(:,2));
                     obj.rrefSegments(ct_factor).ymean_ti = arrayfun(@(i,j) mean(y_all(i:j)),intervals_ti(:,1),intervals_ti(:,2));
                     obj.rrefSegments(ct_factor).vmean_ti = arrayfun(@(i,j) mean(v_all(i:j)),intervals_ti(:,1),intervals_ti(:,2));
@@ -964,6 +977,7 @@ classdef filteredState_BlindLandingtrack < handle
             U_all = obj.filteredState(1:indx,5:7);
             a_all = obj.filteredState(1:indx,9);
             r = v_all./y_all;
+            state_all = obj.filteredState(1:indx,2:10);
 %             diffr = diff(r);
             
 %             figure;
@@ -988,6 +1002,7 @@ classdef filteredState_BlindLandingtrack < handle
                     v_interval = v_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
                     U_interval = U_all(rrefEntry_interval(1):rrefEntry_interval(2),:);   % it is negative (as y definition is negatie up until here)     
                     a_interval = a_all(rrefEntry_interval(1):rrefEntry_interval(2));   % it is negative (as y definition is negatie up until here)                 
+                    state_interval =  state_all(rrefEntry_interval(1):rrefEntry_interval(2),:);
                     intercept_slope = [ones(length(t_interval),1) t_interval]\r_interval;
                     obj.rrefEntrySegments(ct).const_rvst(ct1,1) = intercept_slope(1);
                     obj.rrefEntrySegments(ct).slope_rvst(ct1,1) = intercept_slope(2);
@@ -1023,9 +1038,13 @@ classdef filteredState_BlindLandingtrack < handle
                     obj.rrefEntrySegments(ct).yEntryStart(ct1,1) = y_interval(1);
                     obj.rrefEntrySegments(ct).vEntryStart(ct1,1) = v_interval(1);
                     obj.rrefEntrySegments(ct).rEntryStart(ct1,1) = r_interval(1);
+                    obj.rrefEntrySegments(ct).delta_Uentry(ct1,1) = diff(state_interval([1 end],4));
                     obj.rrefEntrySegments(ct).delta_Ventry(ct1,1) = diff(v_interval([1 end]));
+                    obj.rrefEntrySegments(ct).delta_Wentry(ct1,1) = diff(state_interval([1 end],6));
                     obj.rrefEntrySegments(ct).delta_tentry(ct1,1) = diff(t_interval([1 end]));
                     obj.rrefEntrySegments(ct).amean_entry(ct1,1) = mean(a_interval);
+                    obj.rrefEntrySegments(ct).entryStartState(ct1,:) = state_interval(1,:);
+                    obj.rrefEntrySegments(ct).entryMeanState(ct1,:) = mean(state_interval);
                     
                     obj.rrefEntrySegments(ct).mean_Ua(ct1,1) = mean((sum((wind_speed-U_interval).^2,2)).^0.5); % mean airspeed
                 end

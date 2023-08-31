@@ -40,11 +40,17 @@ classdef data4rrefEntry < handle
         yEntryStart;
         vEntryStart;
         rEntryStart;
+        delta_Uentry;
         delta_Ventry;
+        delta_Wentry;
         delta_tentry;
         amean_entry;
         
         mean_Ua; % mean airspeed
+
+        %%%%% For side acceleration analysis %%%%%
+        entryStartState; % N X 9 vector
+        entryMeanState; % N X 9 vector
         
     end
      methods
